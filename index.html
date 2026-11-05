@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>Math Analyst Learning Hub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" data-page="home">
+        <img src="assets/logo-ma.jpg" alt="Math Analyst Logo" class="brand-logo">
+        <span><b>Math Analyst</b><small>Learning Hub</small></span>
+      </a>
+      <div class="side-label">MENU UTAMA</div>
+      <nav id="mainNav">
+        <button class="nav-item active" data-page="home">⌂ <span>Dashboard</span></button>
+        <button class="nav-item" data-page="books">▣ <span>Kedai Buku</span></button>
+        <button class="nav-item" data-page="quiz">✓ <span>Kuiz Interaktif</span></button>
+        <button class="nav-item" data-page="exam">▤ <span>Exam Simulator</span></button>
+        <button class="nav-item" data-page="classes">▦ <span>Kelas Online</span></button>
+        <button class="nav-item" data-page="learning">◷ <span>Pembelajaran Saya</span></button>
+      </nav>
+      <div class="side-label admin-label">PENGURUSAN</div>
+      <button class="nav-item" data-page="admin">⚙ <span>Admin Demo</span></button>
+      <div class="sidebar-bottom">
+        <div class="demo-chip"><span class="dot"></span> Mod Pratonton</div>
+        <small>Versi pembangunan 4.1</small>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu">☰</button>
+        <div><span class="eyebrow">MATH ANALYST RESOURCES</span><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="profile"><div class="avatar">MA</div><span><b>Pelajar Demo</b><small>Akses percubaan</small></span></div>
+      </header>
+
+      <section id="page-home" class="page active">
+        <div class="welcome-card">
+          <div>
+            <span class="eyebrow light">SELAMAT DATANG KE MATH ANALYST EDUCATION</span>
+            <h2>Belajar Matematik<br><em>dengan lebih yakin.</em></h2>
+            <p>Latihan, kuiz dan simulasi peperiksaan dalam satu platform pembelajaran.</p>
+            <button class="btn btn-white" data-go="quiz">Mula belajar <span>→</span></button>
+          </div>
+          <div class="welcome-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="math-symbol">∑<small>π · √x · ∠</small></div></div>
+        </div>
+        <div class="section-heading"><div><span class="eyebrow">RINGKASAN</span><h2>Ruang pembelajaran anda</h2></div></div>
+        <div class="stats-grid">
+          <article class="stat-card"><span class="stat-icon purple">✓</span><div><small>Kuiz diselesaikan</small><strong id="statQuizzes">0</strong><span class="muted">Teruskan latihan anda</span></div></article>
+          <article class="stat-card"><span class="stat-icon orange">★</span><div><small>Skor purata</small><strong id="statAverage">—</strong><span class="muted">Berdasarkan percubaan</span></div></article>
+          <article class="stat-card"><span class="stat-icon green">▤</span><div><small>Peperiksaan</small><strong id="statExams">0</strong><span class="muted">Simulasi diselesaikan</span></div></article>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card"><div class="feature-top purple-bg">✓</div><h3>Kuiz Interaktif</h3><p>Pilih tahap, subjek dan topik. Jawab soalan serta-merta dan lihat penerangan.</p><button class="text-btn" data-go="quiz">Teroka kuiz →</button></article>
+          <article class="feature-card"><div class="feature-top orange-bg">▤</div><h3>Exam Simulator</h3><p>Latih tubi dalam suasana peperiksaan dengan pemasa dan semakan jawapan.</p><button class="text-btn" data-go="exam">Cuba simulator →</button></article>
+          <article class="feature-card"><div class="feature-top green-bg">▣</div><h3>Kedai Buku</h3><p>Dapatkan modul dan bahan pembelajaran terbitan Math Analyst.</p><button class="text-btn" data-go="books">Lihat buku →</button></article>
+        </div>
+        <div class="notice"><b>Nota pembangunan:</b> Ini ialah prototaip yang boleh diuji pada laptop. Akaun sebenar, pangkalan data awan dan pembayaran belum disambungkan.</div>
+      </section>
+
+      <section id="page-books" class="page">
+        <div class="page-intro"><span class="eyebrow">MATH ANALYST RESOURCES</span><h2>Kedai Buku</h2><p>Modul pembelajaran untuk membantu murid menguasai konsep Matematik.</p></div>
+        <div class="book-grid" id="bookGrid"></div>
+      </section>
+
+      <section id="page-quiz" class="page">
+        <div class="page-intro"><span class="eyebrow">LATIHAN KENDIRI</span><h2>Kuiz Interaktif</h2><p>Pilih tahap dan subjek untuk memulakan latihan.</p></div>
+        <div class="panel quiz-setup" id="quizSetup">
+          <div class="form-grid">
+            <label>Tahap pembelajaran<select id="quizLevel"></select></label>
+            <label>Subjek<select id="quizSubject"></select></label>
+            <label>Topik<select id="quizTopic"></select></label>
+            <label>Bilangan soalan<select id="quizCount"><option value="5">5 soalan</option><option value="10">10 soalan</option><option value="20">20 soalan</option></select></label>
+          </div>
+          <div class="sample-note">Soalan contoh disediakan untuk demonstrasi. Admin boleh menambah soalan melalui menu Admin Demo.</div>
+          <button class="btn btn-primary" id="startQuiz">Mula kuiz <span>→</span></button>
+        </div>
+        <div class="panel quiz-stage hidden" id="quizStage">
+          <div class="quiz-progress"><span id="quizCounter">Soalan 1 / 5</span><span id="quizTimer">00:00</span></div>
+          <div class="progress-track"><div id="quizProgressBar"></div></div>
+          <div id="questionArea"></div>
+          <div class="quiz-actions"><button class="btn btn-ghost" id="quitQuiz">Keluar</button><button class="btn btn-primary" id="nextQuestion">Seterusnya →</button></div>
+        </div>
+        <div class="panel hidden" id="quizResult"></div>
+      </section>
+
+      <section id="page-exam" class="page">
+        <div class="page-intro"><span class="eyebrow">LATIHAN PEPERIKSAAN</span><h2>Exam Simulator</h2><p>Biasakan diri dengan pengurusan masa dan format latihan peperiksaan.</p></div>
+        <div class="panel" id="examSetup">
+          <div class="exam-banner"><div><span class="eyebrow light">SIMULASI PEPERIKSAAN</span><h3>Uji persediaan anda.</h3><p>Pilih mod latihan dan tetapan peperiksaan.</p></div><div class="exam-mark">EX<br><small>01</small></div></div>
+          <div class="form-grid">
+            <label>Tingkatan<select id="examLevel"><option>Form 1</option><option>Form 2</option><option>Form 3</option><option>Form 4</option><option>Form 5</option></select></label>
+            <label>Subjek<select id="examSubject"><option>Matematik</option><option>Additional Mathematics</option><option>Sains</option></select></label>
+            <label>Mod<select id="examMode"><option value="practice">Practice Mode – tanpa tekanan masa</option><option value="exam">Exam Mode – 30 minit</option></select></label>
+            <label>Bilangan soalan<select id="examCount"><option value="5">5 soalan contoh</option><option value="10">10 soalan</option></select></label>
+          </div>
+          <p class="muted small">Kandungan sekarang ialah set contoh demonstrasi, bukan kertas rasmi KPM atau kertas peperiksaan sebenar.</p>
+          <button class="btn btn-primary" id="startExam">Mulakan simulasi →</button>
+        </div>
+        <div class="panel hidden" id="examStage">
+          <div class="quiz-progress"><span id="examCounter">Soalan 1</span><span id="examTimer">30:00</span></div><div class="progress-track"><div id="examProgressBar"></div></div>
+          <div id="examQuestion"></div>
+          <div class="quiz-actions"><button class="btn btn-ghost" id="examPrev">← Sebelum</button><button class="btn btn-primary" id="examNext">Seterusnya →</button></div>
+        </div>
+        <div class="panel hidden" id="examResult"></div>
+      </section>
+
+      <section id="page-classes" class="page">
+        <div class="page-intro"><span class="eyebrow">BIMBINGAN BERSAMA AIN</span><h2>Kelas Online</h2><p>Maklumat kelas dan pendaftaran akan dipaparkan di sini.</p></div>
+        <div class="class-card"><div class="class-icon">▶</div><div><span class="eyebrow">KELAS DALAM TALIAN</span><h3>Kelas Matematik Math Analyst</h3><p>Kelas bimbingan mengikut jadual dan kumpulan yang ditetapkan.</p><div class="tag-row"><span class="tag">Google Meet</span><span class="tag">Nota PDF</span><span class="tag">Bimbingan guru</span></div></div><button class="btn btn-primary" id="classEnquire">Daftar / Tanya</button></div>
+        <div class="notice">Jadual, yuran, pautan Google Meet dan nota kelas boleh dimasukkan oleh admin apabila modul pengurusan kelas disambungkan.</div>
+      </section>
+
+      <section id="page-learning" class="page">
+        <div class="page-intro"><span class="eyebrow">REKOD ANDA</span><h2>Pembelajaran Saya</h2><p>Sejarah latihan dan ringkasan prestasi pada peranti ini.</p></div>
+        <div class="panel"><div class="section-heading"><h3>Sejarah kuiz & peperiksaan</h3><button class="btn btn-ghost btn-small" id="clearHistory">Kosongkan rekod demo</button></div><div id="historyList" class="history-list"></div></div>
+      </section>
+
+      <section id="page-admin" class="page">
+        <div class="page-intro"><span class="eyebrow">PENGURUSAN KANDUNGAN</span><h2>Admin Demo</h2><p>Tambah soalan latihan dan ubah tetapan paparan prototaip.</p></div>
+        <div class="admin-grid">
+          <div class="panel"><h3>Tambah soalan kuiz</h3><p class="muted small">Soalan disimpan dalam browser laptop ini sahaja.</p>
+            <form id="questionForm">
+              <label>Tahap<select id="adminLevel"></select></label>
+              <label>Subjek<select id="adminSubject"></select></label>
+              <label>Topik<input id="adminTopic" required placeholder="Contoh: Algebra"></label>
+              <label>Soalan<textarea id="adminQuestion" required placeholder="Tulis soalan di sini"></textarea></label>
+              <div class="form-grid two">
+                <label>Jawapan A<input id="optA" required></label><label>Jawapan B<input id="optB" required></label>
+                <label>Jawapan C<input id="optC" required></label><label>Jawapan D<input id="optD" required></label>
+              </div>
+              <label>Jawapan betul<select id="adminCorrect"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label>
+              <label>Penerangan<textarea id="adminExplanation" placeholder="Penerangan jawapan (pilihan)"></textarea></label>
+              <button class="btn btn-primary" type="submit">Simpan soalan</button>
+            </form>
+          </div>
+          <div class="panel"><h3>Bank soalan demo</h3><div id="adminQuestionList"></div></div>
+        </div>
+        <div class="panel html-upload-panel">
+          <span class="eyebrow">MODUL BAHARU</span>
+          <h3>Pengurusan Latihan HTML</h3>
+          <p class="muted small">Pilih fail latihan HTML yang dijana menggunakan Gemini. Fail dipratonton dalam bingkai terasing; ia belum diterbitkan kepada pelajar atau disimpan ke pangkalan data.</p>
+          <div class="html-upload-controls">
+            <label for="htmlPracticeTitle">Tajuk latihan</label>
+<input id="htmlPracticeTitle" type="text" placeholder="Contoh: Algebra Asas" required>
+
+<label for="htmlPracticeLevel">Tahap pembelajaran</label>
+<select id="htmlPracticeLevel" required>
+  <option value="">Pilih tahap</option>
+  <option value="Preschool">Prasekolah</option>
+  <option value="Primary">Sekolah Rendah</option>
+  <option value="Form 1-3">Tingkatan 1–3</option>
+  <option value="Form 4-5">Tingkatan 4–5</option>
+</select>
+
+<label for="htmlPracticeSubject">Subjek</label>
+<input id="htmlPracticeSubject" type="text" placeholder="Contoh: Mathematics" required>
+
+<label for="htmlPracticeTopic">Topik</label>
+<input id="htmlPracticeTopic" type="text" placeholder="Contoh: Algebra">
+            <label for="htmlPracticeUpload">Pilih fail latihan (.html)</label>
+<input id="htmlPracticeUpload" type="file" accept=".html,text/html">
+
+<button class="btn btn-primary" id="htmlPracticeLoad" type="button">
+  Muat &amp; pratonton
+</button>
+
+<button class="btn btn-primary" id="htmlPracticeSave" type="button">
+  Upload ke Learning Hub
+</button>
+
+<button class="btn btn-ghost" id="htmlPracticeClear" type="button">
+  Kosongkan
+</button>
+          </div>
+          <p id="htmlPracticeStatus" class="muted small" aria-live="polite">Belum ada fail dipilih.</p>
+          <div id="htmlPracticeFrameWrap" class="html-preview-wrap hidden">
+            <div class="section-heading"><b id="htmlPracticeFileName">Pratonton latihan</b><span class="tag">Pratonton setempat</span></div>
+            <iframe id="htmlPracticeFrame" title="Pratonton latihan HTML" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
+          </div>
+        </div>
+        <div class="panel"><h3>Pakej akses (paparan demo)</h3><div class="plans">
+          <div class="plan"><b>Demo Percuma</b><strong>Free</strong><small>Soalan contoh terhad</small></div>
+          <div class="plan"><b>1 Bulan</b><strong>30 hari</strong><small>Harga ditetapkan admin kelak</small></div>
+          <div class="plan"><b>3 Bulan</b><strong>90 hari</strong><small>Harga ditetapkan admin kelak</small></div>
+        </div><p class="muted small">Pembayaran manual melalui DuitNow / pindahan bank dan pembayaran automatik melalui payment gateway belum diaktifkan. Jangan gunakan prototaip ini untuk menerima bayaran sebenar.</p></div>
+      </section>
+
+      <footer>© 2026 Math Analyst Resources <span>Learning with confidence.</span></footer>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+<script src="access.js"></script>
+</body>
+</html>
