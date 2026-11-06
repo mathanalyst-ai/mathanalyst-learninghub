@@ -106,6 +106,50 @@ let examSet=[], examIndex=0, examAnswers=[], examStarted=0, examInterval=null, e
 
 const $ = id => document.getElementById(id);
 function save(){localStorage.setItem("ma_questions",JSON.stringify(questions));localStorage.setItem("ma_history",JSON.stringify(history));}
+// MATH ANALYST: SIMPAN LAPORAN KE SUPABASE
+async function saveAttemptToCloud(record) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+
+  if (!client) {
+    console.error("Supabase client tidak tersedia.");
+    return false;
+  }
+
+  try {
+    let { data: { session }, error } = await client.auth.getSession();
+    if (error) throw error;
+
+    if (!session) {
+      const result = await client.auth.signInAnonymously();
+      if (result.error) throw result.error;
+      session = result.data.session;
+    }
+
+    if (!session?.user?.id) {
+      throw new Error("Identiti pelajar tidak tersedia.");
+    }
+
+    const { error: saveError } = await client
+      .from("exercise_attempts")
+      .insert({
+        exercise_id: null,
+        student_id: session.user.id,
+        score: record.correct,
+        max_score: record.total,
+        answers: record
+      });
+
+    if (saveError) throw saveError;
+
+    console.log("Laporan berjaya disimpan.");
+    return true;
+
+  } catch (error) {
+    console.error("Gagal menyimpan laporan:", error.message);
+    return false;
+  }
+}
 function fillSelect(el,values){el.innerHTML=values.map(v=>`<option>${v}</option>`).join("");}
 function initSelects(){
  fillSelect($("quizLevel"),LEVELS);fillSelect($("adminLevel"),LEVELS);
@@ -153,12 +197,93 @@ $("startQuiz").addEventListener("click",startQuiz);
 $("nextQuestion").addEventListener("click",()=>{if(quizAnswers[quizIndex]===null){alert("Sila pilih satu jawapan dahulu.");return;}if(quizIndex<quizSet.length-1){quizIndex++;renderQuizQuestion();}else finishQuiz();});
 $("quitQuiz").addEventListener("click",()=>{clearInterval(quizInterval);$("quizStage").classList.add("hidden");$("quizSetup").classList.remove("hidden");});
 function finishQuiz(){
- clearInterval(quizInterval);let correct=quizSet.filter((q,i)=>quizAnswers[i]===q.answer).length;let pct=Math.round(correct/quizSet.length*100);let elapsed=Math.round((Date.now()-quizStarted)/1000);
- history.unshift({type:"Kuiz",date:new Date().toLocaleString("ms-MY"),score:pct,correct,total:quizSet.length,elapsed});
- save();$("quizStage").classList.add("hidden");$("quizResult").classList.remove("hidden");
- const topicStats={};quizSet.forEach((q,i)=>{topicStats[q.topic]??={c:0,t:0};topicStats[q.topic].t++;if(quizAnswers[i]===q.answer)topicStats[q.topic].c++;});
- $("quizResult").innerHTML=`<span class="eyebrow">LAPORAN PRESTASI INDIVIDU</span><h2>Kuiz selesai!</h2><div class="result-score">${pct}%</div><div class="result-summary"><div><b>${correct}/${quizSet.length}</b><span>Jawapan betul</span></div><div><b>${Math.floor(elapsed/60)}m ${elapsed%60}s</b><span>Masa digunakan</span></div></div><h3>Analisis mengikut topik</h3>${Object.entries(topicStats).map(([t,v])=>`<div class="feedback"><b>${t}</b> — ${v.c}/${v.t} betul (${Math.round(v.c/v.t*100)}%)<br>${v.c===v.t?"Penguasaan baik. Cuba soalan lebih mencabar.":"Ulang kaji topik ini dan cuba latihan tambahan."}</div>`).join("")}<div class="feedback"><b>Cadangan:</b> ${pct>=80?"Teruskan dengan soalan aras lebih tinggi.": "Semak semula penerangan jawapan dan ulang latihan topik yang belum dikuasai."}</div><button class="btn btn-primary" id="retryQuiz">Cuba lagi</button>`;
- $("retryQuiz").addEventListener("click",()=>{$("quizResult").classList.add("hidden");$("quizSetup").classList.remove("hidden");});
+  clearInterval(quizInterval);
+
+  let correct = quizSet.filter(
+    (q,i) => quizAnswers[i] === q.answer
+  ).length;
+
+  let pct = Math.round(correct / quizSet.length * 100);
+  let elapsed = Math.round((Date.now()-quizStarted)/1000);
+
+  const topicStats = {};
+
+  quizSet.forEach((q,i) => {
+    topicStats[q.topic] ??= {c:0,t:0};
+    topicStats[q.topic].t++;
+
+    if (quizAnswers[i] === q.answer) {
+      topicStats[q.topic].c++;
+    }
+  });
+
+  const attempt = {
+    type: "Kuiz",
+    level: $("quizLevel").value,
+    subject: $("quizSubject").value,
+    topic: $("quizTopic").value,
+    score: pct,
+    correct: correct,
+    total: quizSet.length,
+    elapsed: elapsed,
+    answers: quizSet.map((q,i) => ({
+      question: q.q,
+      topic: q.topic,
+      selected: quizAnswers[i],
+      correct_answer: q.answer,
+      is_correct: quizAnswers[i] === q.answer
+    }))
+  };
+
+  history.unshift({
+    type:"Kuiz",
+    date:new Date().toLocaleString("ms-MY"),
+    score:pct,
+    correct,
+    total:quizSet.length,
+    elapsed
+  });
+
+  save();
+
+  $("quizStage").classList.add("hidden");
+  $("quizResult").classList.remove("hidden");
+
+  $("quizResult").innerHTML = `
+    <span class="eyebrow">LAPORAN PRESTASI INDIVIDU</span>
+    <h2>Kuiz selesai!</h2>
+    <div class="result-score">${pct}%</div>
+    <div class="result-summary">
+      <div><b>${correct}/${quizSet.length}</b><span>Jawapan betul</span></div>
+      <div><b>${Math.floor(elapsed/60)}m ${elapsed%60}s</b><span>Masa digunakan</span></div>
+    </div>
+    <h3>Analisis mengikut topik</h3>
+    ${Object.entries(topicStats).map(([t,v]) => `
+      <div class="feedback">
+        <b>${t}</b> — ${v.c}/${v.t} betul
+        (${Math.round(v.c/v.t*100)}%)
+      </div>
+    `).join("")}
+    <div id="cloudSaveStatus" class="feedback">
+      Sedang menyimpan laporan...
+    </div>
+    <button class="btn btn-primary" id="retryQuiz">Cuba lagi</button>
+  `;
+
+  $("retryQuiz").addEventListener("click",()=>{
+    $("quizResult").classList.add("hidden");
+    $("quizSetup").classList.remove("hidden");
+  });
+
+  saveAttemptToCloud(attempt).then(success => {
+    const status = $("cloudSaveStatus");
+
+    if (status) {
+      status.textContent = success
+        ? "Laporan berjaya disimpan ke akaun anda."
+        : "Laporan gagal disimpan ke awan. Sila semak sambungan.";
+    }
+  });
 }
 function startExam(){
  const level=$("examLevel").value,subject=$("examSubject").value;
@@ -180,11 +305,86 @@ $("startExam").addEventListener("click",startExam);
 $("examPrev").addEventListener("click",()=>{if(examIndex>0){examIndex--;renderExamQuestion();}});
 $("examNext").addEventListener("click",()=>{if(examIndex<examSet.length-1){examIndex++;renderExamQuestion();}else finishExam();});
 function finishExam(){
- clearInterval(examInterval);let correct=examSet.filter((q,i)=>examAnswers[i]===q.answer).length;let pct=Math.round(correct/examSet.length*100);
- history.unshift({type:"Exam Simulator",date:new Date().toLocaleString("ms-MY"),score:pct,correct,total:examSet.length,elapsed:Math.round((Date.now()-examStarted)/1000)});save();
- $("examStage").classList.add("hidden");$("examResult").classList.remove("hidden");
- $("examResult").innerHTML=`<span class="eyebrow">KEPUTUSAN SIMULASI</span><h2>Peperiksaan selesai</h2><div class="result-score">${pct}%</div><div class="result-summary"><div><b>${correct}/${examSet.length}</b><span>Jawapan betul</span></div><div><b>${examSet.length-correct}</b><span>Jawapan salah / kosong</span></div></div><h3>Semakan jawapan</h3>${examSet.map((q,i)=>`<div class="feedback"><b>Soalan ${i+1}: ${quizLetter(q.answer)}</b> — ${q.explanation||"Tiada penerangan disediakan."}<br>Jawapan anda: ${examAnswers[i]===null?"Tidak dijawab":quizLetter(examAnswers[i])}</div>`).join("")}<button class="btn btn-primary" id="examAgain">Kembali ke tetapan</button>`;
- $("examAgain").addEventListener("click",()=>{$("examResult").classList.add("hidden");$("examSetup").classList.remove("hidden");});
+  clearInterval(examInterval);
+
+  let correct = examSet.filter(
+    (q,i) => examAnswers[i] === q.answer
+  ).length;
+
+  let pct = Math.round(correct / examSet.length * 100);
+  let elapsed = Math.round((Date.now()-examStarted)/1000);
+
+  const attempt = {
+    type: "Exam Simulator",
+    level: $("examLevel").value,
+    subject: $("examSubject").value,
+    mode: examMode,
+    score: pct,
+    correct: correct,
+    total: examSet.length,
+    elapsed: elapsed,
+    answers: examSet.map((q,i) => ({
+      question: q.q,
+      topic: q.topic,
+      selected: examAnswers[i],
+      correct_answer: q.answer,
+      is_correct: examAnswers[i] === q.answer
+    }))
+  };
+
+  history.unshift({
+    type:"Exam Simulator",
+    date:new Date().toLocaleString("ms-MY"),
+    score:pct,
+    correct,
+    total:examSet.length,
+    elapsed
+  });
+
+  save();
+
+  $("examStage").classList.add("hidden");
+  $("examResult").classList.remove("hidden");
+
+  $("examResult").innerHTML = `
+    <span class="eyebrow">KEPUTUSAN SIMULASI</span>
+    <h2>Peperiksaan selesai</h2>
+    <div class="result-score">${pct}%</div>
+    <div class="result-summary">
+      <div><b>${correct}/${examSet.length}</b><span>Jawapan betul</span></div>
+      <div><b>${examSet.length-correct}</b><span>Jawapan salah / kosong</span></div>
+    </div>
+    <h3>Semakan jawapan</h3>
+    ${examSet.map((q,i) => `
+      <div class="feedback">
+        <b>Soalan ${i+1}: ${quizLetter(q.answer)}</b>
+        — ${q.explanation || "Tiada penerangan disediakan."}
+        <br>Jawapan anda:
+        ${examAnswers[i]===null ? "Tidak dijawab" : quizLetter(examAnswers[i])}
+      </div>
+    `).join("")}
+    <div id="cloudSaveStatus" class="feedback">
+      Sedang menyimpan laporan...
+    </div>
+    <button class="btn btn-primary" id="examAgain">
+      Kembali ke tetapan
+    </button>
+  `;
+
+  $("examAgain").addEventListener("click",()=>{
+    $("examResult").classList.add("hidden");
+    $("examSetup").classList.remove("hidden");
+  });
+
+  saveAttemptToCloud(attempt).then(success => {
+    const status = $("cloudSaveStatus");
+
+    if (status) {
+      status.textContent = success
+        ? "Laporan berjaya disimpan ke akaun anda."
+        : "Laporan gagal disimpan ke awan. Sila semak sambungan.";
+    }
+  });
 }
 function quizLetter(i){return "ABCD"[i];}
 $("questionForm").addEventListener("submit",e=>{
