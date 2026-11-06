@@ -121,7 +121,26 @@
   }
 
   function injectAdmin() {
-    const page = $('page-admin');
+        // Panel laporan prestasi untuk Admin
+    const tools = $('maAdminTools');
+
+    if (tools && !$('maAdminReports')) {
+      const reportPanel = document.createElement('div');
+      reportPanel.id = 'maAdminReports';
+      reportPanel.className = 'ma-access-box';
+      reportPanel.style.marginTop = '18px';
+
+      reportPanel.innerHTML = `
+        <h3>Laporan Prestasi Pelajar</h3>
+        <p class="ma-status">Analisis keputusan kuiz dan peperiksaan semua pelajar.</p>
+        <button id="maRefreshReports" type="button">Muat semula laporan</button>
+        <div id="maReportStatus" class="ma-status">Tekan muat semula untuk melihat laporan.</div>
+        <div id="maReportSummary"></div>
+        <div id="maReportRows"></div>
+      `;
+
+      tools.appendChild(reportPanel);
+    }const page = $('page-admin');
     if (!page || $('maAdminPanel')) return;
 
     const panel = document.createElement('div');
@@ -380,7 +399,127 @@ if (redeemStatus) {
   }
 
   async function init() {
-    if (!sb) {
+      async function refreshAdminReports() {
+    const status = $('maReportStatus');
+    const summary = $('maReportSummary');
+    const rows = $('maReportRows');
+
+    if (!status || !summary || !rows) return;
+
+    status.textContent = 'Sedang memuatkan laporan...';
+    summary.innerHTML = '';
+    rows.innerHTML = '';
+
+    try {
+      if (!(await isAdmin())) {
+        throw new Error('Akses admin diperlukan.');
+      }
+
+      const { data: attempts, error } = await sb
+        .from('exercise_attempts')
+        .select('student_id,score,max_score,answers,submitted_at')
+        .order('submitted_at', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+
+      if (!attempts || attempts.length === 0) {
+        status.textContent = 'Belum ada rekod latihan dalam talian.';
+        return;
+      }
+
+      const studentIds = [...new Set(attempts.map(x => x.student_id).filter(Boolean))];
+
+      const { data: profiles, error: profileError } = await sb
+        .from('profiles')
+        .select('id,full_name')
+        .in('id', studentIds);
+
+      if (profileError) throw profileError;
+
+      const names = {};
+      (profiles || []).forEach(profile => {
+        names[profile.id] = profile.full_name || '';
+      });
+
+      const studentCount = studentIds.length;
+      const totalAttempts = attempts.length;
+
+      const percentages = attempts.map(item => {
+        const score = Number(item.score || 0);
+        const max = Number(item.max_score || 0);
+        return max > 0 ? (score / max) * 100 : 0;
+      });
+
+      const average = Math.round(
+        percentages.reduce((total, value) => total + value, 0) / percentages.length
+      );
+
+      status.textContent = 'Laporan berjaya dimuatkan.';
+
+      summary.innerHTML = `
+        <div class="ma-admin-grid" style="margin-top:14px">
+          <div class="ma-access-box">
+            <div class="ma-status">Jumlah pelajar</div>
+            <h2>${studentCount}</h2>
+          </div>
+          <div class="ma-access-box">
+            <div class="ma-status">Jumlah percubaan</div>
+            <h2>${totalAttempts}</h2>
+          </div>
+          <div class="ma-access-box">
+            <div class="ma-status">Purata pencapaian</div>
+            <h2>${average}%</h2>
+          </div>
+        </div>
+      `;
+
+      rows.innerHTML = `
+        <h3 style="margin-top:22px">Sejarah latihan terkini</h3>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Pelajar</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Latihan</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Subjek</th>
+                <th style="text-align:center;padding:10px;border-bottom:1px solid #e8ecf2">Markah</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Tarikh</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attempts.map(item => {
+                const answer = item.answers || {};
+                const score = Number(item.score || 0);
+                const max = Number(item.max_score || 0);
+                const pct = max > 0 ? Math.round(score / max * 100) : 0;
+                const studentName = names[item.student_id] ||
+                  ('Pelajar ' + String(item.student_id || '').slice(0, 8));
+                const date = item.submitted_at
+                  ? new Date(item.submitted_at).toLocaleString('ms-MY')
+                  : '—';
+
+                return `
+                  <tr>
+                    <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(studentName)}</td>
+                    <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(answer.type || 'Latihan')}</td>
+                    <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(answer.subject || '—')}</td>
+                    <td style="padding:10px;text-align:center;border-bottom:1px solid #e8ecf2"><b>${pct}%</b></td>
+                    <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(date)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+    } catch (error) {
+      status.textContent = 'Gagal memuatkan laporan: ' + error.message;
+      status.style.color = '#b42318';
+    }
+  }
+     if (!sb) {
       console.error('Supabase client tidak dijumpai. Semak susunan script.');
       return;
     }
@@ -398,6 +537,7 @@ if (redeemStatus) {
     $('maAdminSignIn')?.addEventListener('click', adminLogin);
     $('maCreateCode')?.addEventListener('click', createCode);
     $('maRefreshExercises')?.addEventListener('click', refreshAdminExercises);
+     $('maRefreshReports')?.addEventListener('click', refreshAdminReports);
 
     $('maAdminSignOut')?.addEventListener('click', async () => {
       await sb.auth.signOut();
