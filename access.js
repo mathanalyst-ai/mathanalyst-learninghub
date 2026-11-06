@@ -414,6 +414,8 @@
       if (page === 'practice') {
         document.querySelectorAll('.page').forEach((item) => item.classList.remove('active'));
         $('page-practice')?.classList.add('active');
+         // Tutup sidebar selepas memilih menu pada telefon
+      document.querySelector('.sidebar')?.classList.remove('open');
         document.querySelectorAll('.nav-item').forEach((button) => {
           button.classList.toggle('active', button.dataset.page === 'practice');
         });
