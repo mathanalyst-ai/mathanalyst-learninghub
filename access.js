@@ -121,16 +121,16 @@
   }
 
   function injectAdmin() {
-       
-     
-    }const page = $('page-admin');
+    const page = $('page-admin');
     if (!page || $('maAdminPanel')) return;
 
     const panel = document.createElement('div');
     panel.id = 'maAdminPanel';
     panel.className = 'ma-access-box';
+
     panel.innerHTML = `
       <h2>Portal Admin Math Analyst</h2>
+
       <div id="maAdminLogin">
         <p>Login menggunakan akaun Supabase yang telah diberikan role <b>admin</b>.</p>
         <div class="ma-access-row">
@@ -140,11 +140,13 @@
         </div>
         <div id="maAdminLoginStatus" class="ma-status" aria-live="polite"></div>
       </div>
+
       <div id="maAdminTools" class="hidden">
         <div class="ma-access-row">
           <b id="maAdminWho">Admin aktif</b>
           <button class="secondary" id="maAdminSignOut" type="button">Log keluar</button>
         </div>
+
         <div class="ma-admin-grid">
           <div class="ma-access-box">
             <h3>Jana kod akses</h3>
@@ -159,6 +161,7 @@
             <div id="maGeneratedCode"></div>
             <div class="ma-status">Kod dipaparkan sekali sahaja. Salin dan simpan sebelum menutup halaman.</div>
           </div>
+
           <div class="ma-access-box">
             <h3>Latihan HTML</h3>
             <p class="ma-status">Muat naik latihan melalui panel Pengurusan Latihan HTML di bawah. Latihan baharu disimpan sebagai DRAFT.</p>
@@ -166,30 +169,20 @@
             <div id="maAdminExercises"></div>
           </div>
         </div>
-      </div>`;
+
+        <div id="maAdminReports" class="ma-access-box" style="margin-top:18px">
+          <h3>Laporan Prestasi Pelajar</h3>
+          <p class="ma-status">Analisis keputusan kuiz dan peperiksaan semua pelajar.</p>
+          <button id="maRefreshReports" type="button">Muat semula laporan</button>
+          <div id="maReportStatus" class="ma-status">Tekan muat semula untuk melihat laporan.</div>
+          <div id="maReportSummary"></div>
+          <div id="maReportRows"></div>
+        </div>
+      </div>
+    `;
+
     page.appendChild(panel);
-         // Paparan laporan prestasi Admin
-    const tools = $('maAdminTools');
-
-    if (tools && !$('maAdminReports')) {
-      const reportPanel = document.createElement('div');
-      reportPanel.id = 'maAdminReports';
-      reportPanel.className = 'ma-access-box';
-      reportPanel.style.marginTop = '18px';
-
-      reportPanel.innerHTML = `
-        <h3>Laporan Prestasi Pelajar</h3>
-        <p class="ma-status">Analisis keputusan kuiz dan peperiksaan semua pelajar.</p>
-        <button id="maRefreshReports" type="button">Muat semula laporan</button>
-        <div id="maReportStatus" class="ma-status">Tekan muat semula untuk melihat laporan.</div>
-        <div id="maReportSummary"></div>
-        <div id="maReportRows"></div>
-      `;
-
-      tools.appendChild(reportPanel);
-    }
   }
-
   async function refreshStudent() {
     const sub = $('maSubStatus');
     const list = $('maExerciseList');
