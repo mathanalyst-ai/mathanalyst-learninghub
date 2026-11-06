@@ -185,6 +185,26 @@
         </div>
       </div>`;
     page.appendChild(panel);
+         // Paparan laporan prestasi Admin
+    const tools = $('maAdminTools');
+
+    if (tools && !$('maAdminReports')) {
+      const reportPanel = document.createElement('div');
+      reportPanel.id = 'maAdminReports';
+      reportPanel.className = 'ma-access-box';
+      reportPanel.style.marginTop = '18px';
+
+      reportPanel.innerHTML = `
+        <h3>Laporan Prestasi Pelajar</h3>
+        <p class="ma-status">Analisis keputusan kuiz dan peperiksaan semua pelajar.</p>
+        <button id="maRefreshReports" type="button">Muat semula laporan</button>
+        <div id="maReportStatus" class="ma-status">Tekan muat semula untuk melihat laporan.</div>
+        <div id="maReportSummary"></div>
+        <div id="maReportRows"></div>
+      `;
+
+      tools.appendChild(reportPanel);
+    }
   }
 
   async function refreshStudent() {
