@@ -176,6 +176,16 @@
       const access = await checkAccess();
       const result = Array.isArray(access) ? access[0] : access;
       const active = !!result?.active;
+       const redeemRow = $('maRedeem')?.closest('.ma-access-row');
+const redeemStatus = $('maRedeemStatus');
+
+if (redeemRow) {
+  redeemRow.style.display = active ? 'none' : 'flex';
+}
+
+if (redeemStatus) {
+  redeemStatus.style.display = active ? 'none' : 'block';
+}
       const expiry = result?.expires_at;
 
       if (sub) {
