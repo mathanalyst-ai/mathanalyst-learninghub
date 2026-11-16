@@ -178,11 +178,201 @@
           <div id="maReportSummary"></div>
           <div id="maReportRows"></div>
         </div>
+                <div id="maQuestionPanel" class="ma-access-box" style="margin-top:18px">
+          <h3>Bank Soalan Math Analyst</h3>
+          <p class="ma-status">Masukkan soalan objektif atau subjektif ke dalam bank soalan.</p>
+
+          <form id="maQuestionForm">
+
+            <div class="ma-access-row">
+              <select id="maQSubject" required>
+                <option value="">Pilih subjek</option>
+                <option value="Matematik">Matematik</option>
+                <option value="Sains">Sains</option>
+                <option value="Additional Mathematics">Additional Mathematics</option>
+              </select>
+
+              <select id="maQLevel" required>
+                <option value="">Pilih tahun / tingkatan</option>
+                <option value="Tahun 4">Tahun 4</option>
+                <option value="Tahun 5">Tahun 5</option>
+                <option value="Tahun 6">Tahun 6</option>
+                <option value="Tingkatan 1">Tingkatan 1</option>
+                <option value="Tingkatan 2">Tingkatan 2</option>
+                <option value="Tingkatan 3">Tingkatan 3</option>
+                <option value="Tingkatan 4">Tingkatan 4</option>
+                <option value="Tingkatan 5">Tingkatan 5</option>
+              </select>
+            </div>
+
+            <div class="ma-access-row">
+              <input id="maQTopic" type="text" placeholder="Nama topik" required>
+
+              <select id="maQType" required>
+                <option value="objective">Objektif</option>
+                <option value="subjective">Subjektif</option>
+              </select>
+            </div>
+
+            <label for="maQText"><b>Soalan</b></label>
+            <textarea id="maQText" rows="4"
+              style="width:100%;padding:10px;margin:8px 0"
+              placeholder="Masukkan soalan di sini..." required></textarea>
+
+            <div id="maQObjectiveFields">
+              <h4>Pilihan jawapan</h4>
+
+              <input id="maQOptionA" placeholder="Pilihan A">
+              <input id="maQOptionB" placeholder="Pilihan B">
+              <input id="maQOptionC" placeholder="Pilihan C">
+              <input id="maQOptionD" placeholder="Pilihan D">
+
+              <label for="maQCorrect"><b>Jawapan betul</b></label>
+              <select id="maQCorrect">
+                <option value="">Pilih jawapan</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+            </div>
+
+            <div id="maQSubjectiveFields" style="display:none;margin-top:12px">
+              <label for="maQExpected"><b>Skema jawapan</b></label>
+              <textarea id="maQExpected" rows="4"
+                style="width:100%;padding:10px;margin:8px 0"
+                placeholder="Masukkan jawapan contoh atau skema pemarkahan..."></textarea>
+            </div>
+
+            <label for="maQExplanation"><b>Penerangan / Jalan kerja</b></label>
+            <textarea id="maQExplanation" rows="4"
+              style="width:100%;padding:10px;margin:8px 0"
+              placeholder="Masukkan jalan kerja atau penerangan..."></textarea>
+
+            <div class="ma-access-row">
+              <input id="maQMarks" type="number" min="1" value="1"
+                placeholder="Markah">
+
+              <select id="maQDifficulty">
+                <option value="Mudah">Mudah</option>
+                <option value="Sederhana" selected>Sederhana</option>
+                <option value="Sukar">Sukar</option>
+              </select>
+            </div>
+
+            <button id="maQSave" type="submit">Simpan Soalan</button>
+            <div id="maQStatus" class="ma-status" aria-live="polite"></div>
+
+          </form>
+        </div>
       </div>
     `;
 
     page.appendChild(panel);
   }
+   
+async function saveQuestion(event) {
+  event.preventDefault();
+
+  const form = $('maQuestionForm');
+  const status = $('maQStatus');
+  const button = $('maQSave');
+
+  if (!form || !status || !button) return;
+
+  const type = $('maQType').value;
+
+  const question = $('maQText').value.trim();
+  const topic = $('maQTopic').value.trim();
+
+  let options = [];
+  let correctAnswer = null;
+  let expectedAnswer = null;
+
+  if (type === 'objective') {
+    options = {
+      A: $('maQOptionA').value.trim(),
+      B: $('maQOptionB').value.trim(),
+      C: $('maQOptionC').value.trim(),
+      D: $('maQOptionD').value.trim()
+    };
+
+    correctAnswer = $('maQCorrect').value;
+
+    if (Object.values(options).some(value => !value)) {
+      setStatus(status, 'Sila lengkapkan semua pilihan A hingga D.', true);
+      return;
+    }
+
+    if (!correctAnswer) {
+      setStatus(status, 'Sila pilih jawapan yang betul.', true);
+      return;
+    }
+  } else {
+    expectedAnswer = $('maQExpected').value.trim();
+
+    if (!expectedAnswer) {
+      setStatus(status, 'Sila masukkan skema jawapan.', true);
+      return;
+    }
+  }
+
+  const marks = Number($('maQMarks').value);
+
+  if (!Number.isInteger(marks) || marks < 1) {
+    setStatus(status, 'Markah mestilah nombor bulat sekurang-kurangnya 1.', true);
+    return;
+  }
+
+  button.disabled = true;
+  setStatus(status, 'Sedang menyimpan soalan...');
+
+  try {
+    if (!(await isAdmin())) {
+      throw new Error('Akses admin diperlukan.');
+    }
+
+    const { data: userData, error: userError } = await sb.auth.getUser();
+
+    if (userError) throw userError;
+    if (!userData.user) throw new Error('Sesi admin tidak dijumpai.');
+
+    const questionData = {
+      subject: $('maQSubject').value,
+      school_level: $('maQLevel').value,
+      topic: topic,
+      question_type: type,
+      question_text: question,
+      options: options,
+      correct_answer: correctAnswer,
+      expected_answer: expectedAnswer,
+      explanation: $('maQExplanation').value.trim(),
+      marks: marks,
+      difficulty: $('maQDifficulty').value,
+      status: 'draft',
+      created_by: userData.user.id
+    };
+
+    const { error } = await sb
+      .from('question_bank')
+      .insert(questionData);
+
+    if (error) throw error;
+
+    form.reset();
+
+    $('maQObjectiveFields').style.display = 'block';
+    $('maQSubjectiveFields').style.display = 'none';
+
+    setStatus(status, 'Berjaya! Soalan telah disimpan sebagai DRAFT.');
+
+  } catch (error) {
+    setStatus(status, 'Gagal menyimpan soalan: ' + error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
   async function refreshStudent() {
     const sub = $('maSubStatus');
     const list = $('maExerciseList');
@@ -554,6 +744,18 @@ async function init() {
     $('maCreateCode')?.addEventListener('click', createCode);
     $('maRefreshExercises')?.addEventListener('click', refreshAdminExercises);
      $('maRefreshReports')?.addEventListener('click', refreshAdminReports);
+   // Bank Soalan
+$('maQuestionForm')?.addEventListener('submit', saveQuestion);
+
+$('maQType')?.addEventListener('change', () => {
+  const type = $('maQType').value;
+
+  $('maQObjectiveFields').style.display =
+    type === 'objective' ? 'block' : 'none';
+
+  $('maQSubjectiveFields').style.display =
+    type === 'subjective' ? 'block' : 'none';
+});
 
     $('maAdminSignOut')?.addEventListener('click', async () => {
       await sb.auth.signOut();
