@@ -645,7 +645,7 @@ async function refreshQuestionBank() {
     status.style.color = '#b42318';
   }
 }
-
+async function refreshStudent() {
     const sub = $('maSubStatus');
     const list = $('maExerciseList');
 
@@ -719,7 +719,9 @@ if (redeemStatus) {
     }
   }
 
-  async function refreshStudent() {
+ 
+
+
      
 
   async function redeem() {
@@ -1100,6 +1102,7 @@ $('maQType')?.addEventListener('change', () => {
         if ($('maAdminWho')) $('maAdminWho').textContent = 'Admin aktif';
         showAdminUpload(true);
         await refreshAdminExercises();
+         await refreshQuestionBank();
       }
     } catch (error) {
       console.warn('Sesi atau akses belum tersedia:', error.message);
