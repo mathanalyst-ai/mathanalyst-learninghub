@@ -423,9 +423,6 @@ await refreshQuestionBank();
     button.disabled = false;
   }
 }
-
-  async function refreshStudent() {
-     
 async function refreshQuestionBank() {
   const output = $('maQuestionList');
   const status = $('maQuestionListStatus');
@@ -721,6 +718,9 @@ if (redeemStatus) {
       setStatus(list, 'Tidak dapat memuatkan latihan.', true);
     }
   }
+
+  async function refreshStudent() {
+     
 
   async function redeem() {
     const input = $('maAccessCode');
