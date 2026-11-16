@@ -8,6 +8,8 @@
   const sb = (typeof supabaseClient !== 'undefined') ? supabaseClient : window.supabaseClient;
   const BUCKET = 'html-exercises';
   const $ = (id) => document.getElementById(id);
+   let editingQuestionId = null;
+   let editingQuestionStatus = 'draft';
 
   const esc = (value = '') => String(value).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -264,6 +266,28 @@
             <div id="maQStatus" class="ma-status" aria-live="polite"></div>
 
           </form>
+          <div class="ma-access-box" style="margin-top:18px">
+  <h3>Senarai Bank Soalan</h3>
+
+  <div class="ma-access-row">
+    <select id="maQuestionFilter">
+      <option value="">Semua subjek</option>
+      <option value="Matematik">Matematik</option>
+      <option value="Sains">Sains</option>
+      <option value="Additional Mathematics">Additional Mathematics</option>
+    </select>
+
+    <button id="maRefreshQuestions" type="button">
+      Muat semula soalan
+    </button>
+  </div>
+
+  <div id="maQuestionListStatus" class="ma-status">
+    Senarai soalan belum dimuatkan.
+  </div>
+
+  <div id="maQuestionList"></div>
+</div>
         </div>
       </div>
     `;
@@ -353,18 +377,45 @@ async function saveQuestion(event) {
       created_by: userData.user.id
     };
 
-    const { error } = await sb
-      .from('question_bank')
-      .insert(questionData);
+  let saveError;
 
-    if (error) throw error;
+if (editingQuestionId) {
+  const { error } = await sb
+    .from('question_bank')
+    .update({
+  ...questionData,
+  status: editingQuestionStatus,
+  updated_at: new Date().toISOString()
+})
+    .eq('id', editingQuestionId);
 
-    form.reset();
+  saveError = error;
+} else {
+  const { error } = await sb
+    .from('question_bank')
+    .insert(questionData);
+
+  saveError = error;
+}
+
+if (saveError) throw saveError;
+
+editingQuestionId = null;
+     editingQuestionStatus = 'draft';
+$('maQSave').textContent = 'Simpan Soalan';
+
+form.reset();
+     $('maQSave').textContent = 'Simpan Soalan';
+
+await refreshQuestionBank();
 
     $('maQObjectiveFields').style.display = 'block';
     $('maQSubjectiveFields').style.display = 'none';
 
-    setStatus(status, 'Berjaya! Soalan telah disimpan sebagai DRAFT.');
+   setStatus(
+  status,
+  'Berjaya! Soalan telah disimpan atau dikemaskini.'
+);
 
   } catch (error) {
     setStatus(status, 'Gagal menyimpan soalan: ' + error.message, true);
@@ -374,6 +425,230 @@ async function saveQuestion(event) {
 }
 
   async function refreshStudent() {
+     
+async function refreshQuestionBank() {
+  const output = $('maQuestionList');
+  const status = $('maQuestionListStatus');
+
+  if (!output || !status) return;
+
+  status.textContent = 'Sedang memuatkan soalan...';
+  output.innerHTML = '';
+
+  try {
+    if (!(await isAdmin())) {
+      throw new Error('Akses admin diperlukan.');
+    }
+
+    let query = sb
+      .from('question_bank')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const filter = $('maQuestionFilter')?.value;
+
+    if (filter) {
+      query = query.eq('subject', filter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      status.textContent = 'Belum ada soalan dalam bank soalan.';
+      return;
+    }
+
+    status.textContent = 'Jumlah soalan: ' + data.length;
+
+    output.innerHTML = data.map(item => `
+      <div class="ma-exercise" style="padding:15px 0">
+        <div class="ma-access-row" style="justify-content:space-between">
+          <b>${esc(item.subject)} · ${esc(item.school_level)}</b>
+          <b>${esc(item.status.toUpperCase())}</b>
+        </div>
+
+        <div class="ma-status">
+          ${esc(item.topic)} ·
+          ${item.question_type === 'objective' ? 'Objektif' : 'Subjektif'}
+          · ${esc(item.difficulty)}
+          · ${Number(item.marks)} markah
+        </div>
+
+        <p>${esc(item.question_text)}</p>
+
+        <div class="ma-access-row">
+          <button type="button" data-q-view="${esc(item.id)}">
+            Lihat
+          </button>
+
+          <button type="button" data-q-edit="${esc(item.id)}">
+            Edit
+          </button>
+
+          <button type="button" data-q-delete="${esc(item.id)}"
+            style="background:#b42318">
+            Padam
+          </button>
+
+          <button type="button" data-q-publish="${esc(item.id)}"
+            style="background:${item.status === 'published' ? '#68748a' : '#16865b'}">
+            ${item.status === 'published' ? 'Nyahterbit' : 'Terbitkan'}
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    output.querySelectorAll('[data-q-view]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = data.find(x => x.id === button.dataset.qView);
+        if (!item) return;
+
+        const options = item.options || {};
+
+        let details =
+          'Subjek: ' + item.subject +
+          '\nTingkatan: ' + item.school_level +
+          '\nTopik: ' + item.topic +
+          '\nJenis: ' + item.question_type +
+          '\n\nSoalan:\n' + item.question_text;
+
+        if (item.question_type === 'objective') {
+          details += '\n\nA. ' + (options.A || '');
+          details += '\nB. ' + (options.B || '');
+          details += '\nC. ' + (options.C || '');
+          details += '\nD. ' + (options.D || '');
+          details += '\n\nJawapan: ' + (item.correct_answer || '');
+        } else {
+          details += '\n\nSkema jawapan:\n' +
+            (item.expected_answer || '');
+        }
+
+        details += '\n\nPenerangan:\n' +
+          (item.explanation || 'Tiada penerangan');
+
+        alert(details);
+      });
+    });
+
+    output.querySelectorAll('[data-q-edit]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = data.find(x => x.id === button.dataset.qEdit);
+        if (!item) return;
+
+        editingQuestionId = item.id;
+         editingQuestionStatus = item.status;
+
+        $('maQSubject').value = item.subject;
+        $('maQLevel').value = item.school_level;
+        $('maQTopic').value = item.topic;
+        $('maQType').value = item.question_type;
+        $('maQText').value = item.question_text;
+
+        const options = item.options || {};
+
+        $('maQOptionA').value = options.A || '';
+        $('maQOptionB').value = options.B || '';
+        $('maQOptionC').value = options.C || '';
+        $('maQOptionD').value = options.D || '';
+
+        $('maQCorrect').value = item.correct_answer || '';
+        $('maQExpected').value = item.expected_answer || '';
+        $('maQExplanation').value = item.explanation || '';
+        $('maQMarks').value = item.marks || 1;
+        $('maQDifficulty').value = item.difficulty || 'Sederhana';
+
+        $('maQObjectiveFields').style.display =
+          item.question_type === 'objective' ? 'block' : 'none';
+
+        $('maQSubjectiveFields').style.display =
+          item.question_type === 'subjective' ? 'block' : 'none';
+
+        $('maQSave').textContent = 'Simpan Perubahan';
+
+        setStatus(
+          $('maQStatus'),
+          'Sedang mengedit soalan. Tekan Simpan Perubahan selepas selesai.'
+        );
+
+        $('maQuestionForm').scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      });
+    });
+
+    output.querySelectorAll('[data-q-delete]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const item = data.find(x => x.id === button.dataset.qDelete);
+        if (!item) return;
+
+        if (!confirm('Padam soalan ini secara kekal?')) return;
+
+        button.disabled = true;
+
+        try {
+          if (!(await isAdmin())) {
+            throw new Error('Akses admin diperlukan.');
+          }
+
+          const { error } = await sb
+            .from('question_bank')
+            .delete()
+            .eq('id', item.id);
+
+          if (error) throw error;
+
+          await refreshQuestionBank();
+
+        } catch (error) {
+          alert('Gagal memadam soalan: ' + error.message);
+          button.disabled = false;
+        }
+      });
+    });
+
+    output.querySelectorAll('[data-q-publish]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const item = data.find(x => x.id === button.dataset.qPublish);
+        if (!item) return;
+
+        button.disabled = true;
+
+        try {
+          if (!(await isAdmin())) {
+            throw new Error('Akses admin diperlukan.');
+          }
+
+          const newStatus =
+            item.status === 'published' ? 'draft' : 'published';
+
+          const { error } = await sb
+            .from('question_bank')
+            .update({
+              status: newStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.id);
+
+          if (error) throw error;
+
+          await refreshQuestionBank();
+
+        } catch (error) {
+          alert('Gagal mengubah status: ' + error.message);
+          button.disabled = false;
+        }
+      });
+    });
+
+  } catch (error) {
+    status.textContent = 'Gagal memuatkan soalan: ' + error.message;
+    status.style.color = '#b42318';
+  }
+}
+
     const sub = $('maSubStatus');
     const list = $('maExerciseList');
 
@@ -505,6 +780,7 @@ if (redeemStatus) {
       $('maAdminWho').textContent = 'Admin: ' + $('maAdminEmail').value.trim();
       showAdminUpload(true);
       await refreshAdminExercises();
+       await refreshQuestionBank();
     } catch (error) {
       setStatus(output, 'Login gagal: ' + error.message, true);
     } finally {
@@ -573,6 +849,7 @@ if (redeemStatus) {
               .eq('id', button.dataset.publish);
             if (updateError) throw updateError;
             await refreshAdminExercises();
+             await refreshQuestionBank();
           } catch (error) {
             alert('Gagal terbitkan: ' + error.message);
             button.disabled = false;
@@ -744,6 +1021,16 @@ async function init() {
     $('maCreateCode')?.addEventListener('click', createCode);
     $('maRefreshExercises')?.addEventListener('click', refreshAdminExercises);
      $('maRefreshReports')?.addEventListener('click', refreshAdminReports);
+   // Pengurusan Bank Soalan
+$('maRefreshQuestions')?.addEventListener(
+  'click',
+  refreshQuestionBank
+);
+
+$('maQuestionFilter')?.addEventListener(
+  'change',
+  refreshQuestionBank
+);
    // Bank Soalan
 $('maQuestionForm')?.addEventListener('submit', saveQuestion);
 
