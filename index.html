@@ -19,6 +19,7 @@
         <button class="nav-item active" data-page="home">⌂ <span>Dashboard</span></button>
         <button class="nav-item" data-page="books">▣ <span>Kedai Buku</span></button>
         <button class="nav-item" data-page="quiz">✓ <span>Kuiz Interaktif</span></button>
+        <button class="nav-item" data-page="bank">▤ <span>Bank Soalan</span></button>
         <button class="nav-item" data-page="exam">▤ <span>Exam Simulator</span></button>
         <button class="nav-item" data-page="classes">▦ <span>Kelas Online</span></button>
         <button class="nav-item" data-page="learning">◷ <span>Pembelajaran Saya</span></button>
@@ -87,6 +88,95 @@
         </div>
         <div class="panel hidden" id="quizResult"></div>
       </section>
+      
+<section id="page-bank" class="page">
+  <div class="page-intro">
+    <span class="eyebrow">LATIHAN KENDIRI</span>
+    <h2>Bank Soalan</h2>
+    <p>Pilih tahap, subjek dan topik untuk menjawab latihan.</p>
+  </div>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>
+        Tahap pembelajaran
+        <select id="bankLevel">
+          <option value="">Semua tahap</option>
+          <option>Tahun 1</option>
+          <option>Tahun 2</option>
+          <option>Tahun 3</option>
+          <option>Tahun 4</option>
+          <option>Tahun 5</option>
+          <option>Tahun 6</option>
+          <option>Form 1</option>
+          <option>Form 2</option>
+          <option>Form 3</option>
+          <option>Form 4</option>
+          <option>Form 5</option>
+        </select>
+      </label>
+
+      <label>
+        Subjek
+        <select id="bankSubject">
+          <option value="">Semua subjek</option>
+          <option>Matematik</option>
+          <option>Sains</option>
+          <option>Additional Mathematics</option>
+        </select>
+      </label>
+
+      <label>
+        Topik
+        <select id="bankTopic">
+          <option value="">Semua topik</option>
+        </select>
+      </label>
+
+      <label>
+        Bilangan soalan
+        <select id="bankCount">
+          <option value="5">5 soalan</option>
+          <option value="10">10 soalan</option>
+          <option value="20">20 soalan</option>
+        </select>
+      </label>
+    </div>
+
+    <button class="btn btn-primary" id="bankStart">
+      Mula Latihan →
+    </button>
+
+    <p id="bankStatus" class="muted small">
+      Pilih tetapan latihan untuk bermula.
+    </p>
+  </div>
+
+  <div class="panel hidden" id="bankQuestionStage">
+    <div class="quiz-progress">
+      <span id="bankCounter">Soalan 1</span>
+      <span id="bankScore">Markah: 0</span>
+    </div>
+
+    <div class="progress-track">
+      <div id="bankProgressBar"></div>
+    </div>
+
+    <div id="bankQuestionArea"></div>
+
+    <div class="quiz-actions">
+      <button class="btn btn-ghost" id="bankQuit">
+        Keluar
+      </button>
+      <button class="btn btn-primary" id="bankNext">
+        Seterusnya →
+      </button>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="bankResult"></div>
+</section>
+
 
       <section id="page-exam" class="page">
         <div class="page-intro"><span class="eyebrow">LATIHAN PEPERIKSAAN</span><h2>Exam Simulator</h2><p>Biasakan diri dengan pengurusan masa dan format latihan peperiksaan.</p></div>
