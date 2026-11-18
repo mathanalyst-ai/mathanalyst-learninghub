@@ -704,4 +704,107 @@ async function startBank() {
 
 // Butang mula latihan
 $("bankStart").addEventListener("click", startBank);
+// Navigasi soalan Bank Soalan
+$("bankNext").addEventListener("click", async () => {
+  const answer = bankAnswers[bankIndex];
+
+  if (answer === null || answer === undefined || String(answer).trim() === "") {
+    alert("Sila jawab soalan ini dahulu.");
+    return;
+  }
+
+  if (bankIndex < bankQuestions.length - 1) {
+    bankIndex++;
+    renderBankQuestion();
+  } else {
+    await submitBankAnswers();
+  }
+});
+
+// Keluar daripada latihan
+$("bankQuit").addEventListener("click", () => {
+  if (!confirm("Anda pasti mahu keluar daripada latihan ini?")) return;
+
+  bankStarted = false;
+  bankQuestions = [];
+  bankAnswers = [];
+  bankIndex = 0;
+
+  $("bankQuestionStage").classList.add("hidden");
+  $("bankResult").classList.add("hidden");
+
+  setBankStatus("Latihan telah dihentikan.");
+});
+// Hantar jawapan Bank Soalan ke Supabase
+async function submitBankAnswers() {
+  const client = getBankClient();
+  const button = $("bankNext");
+
+  button.disabled = true;
+  button.textContent = "Sedang menyemak...";
+
+  try {
+    const answers = bankQuestions.map((q, i) => ({
+      question_id: q.id,
+      answer: String(bankAnswers[i]).trim()
+    }));
+
+    const { data, error } = await client.rpc(
+      "submit_question_bank_attempt",
+      {
+        p_school_level: $("bankLevel").value,
+        p_subject: $("bankSubject").value,
+        p_topic: $("bankTopic").value || null,
+        p_answers: answers
+      }
+    );
+
+    if (error) throw error;
+
+    $("bankQuestionStage").classList.add("hidden");
+    $("bankResult").classList.remove("hidden");
+
+    const result = Array.isArray(data) ? data[0] : data;
+
+    $("bankResult").innerHTML = `
+      <div class="result-score">
+        ${Number(result.percentage || 0)}%
+      </div>
+
+      <h2>Latihan selesai!</h2>
+
+      <p>
+        Jawapan betul:
+        <b>${result.correct_answers} / ${result.total_questions}</b>
+      </p>
+
+      <p>
+        Markah:
+        <b>${result.score} / ${result.max_score}</b>
+      </p>
+
+      <p>Keputusan berjaya disimpan.</p>
+
+      <button class="btn btn-primary" id="bankTryAgain">
+        Cuba latihan lagi
+      </button>
+    `;
+
+    $("bankTryAgain").addEventListener("click", () => {
+      $("bankResult").classList.add("hidden");
+      $("bankQuestionStage").classList.add("hidden");
+      setBankStatus("Pilih tetapan untuk memulakan latihan baharu.");
+    });
+
+    setBankStatus("Jawapan berjaya dihantar dan disimpan.");
+
+  } catch (error) {
+    alert("Gagal menghantar jawapan: " + error.message);
+    setBankStatus("Gagal menyimpan keputusan.", true);
+
+  } finally {
+    button.disabled = false;
+    button.textContent = "Seterusnya";
+  }
+}
 initSelects();renderBooks();renderStats();
