@@ -481,4 +481,27 @@ if(!input||!load||!clear||!frame||!wrap||!status) {
    wrap.classList.add("hidden");status.textContent="Pratonton dikosongkan.";
  });
 })();
+// =====================================
+// BANK SOALAN MATH ANALYST
+// =====================================
+
+let bankQuestions = [];
+let bankAnswers = [];
+let bankIndex = 0;
+let bankStarted = false;
+
+// Dapatkan sambungan Supabase
+function getBankClient() {
+  return window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+}
+
+// Paparkan status Bank Soalan
+function setBankStatus(message, isError = false) {
+  const status = $("bankStatus");
+  if (!status) return;
+
+  status.textContent = message;
+  status.style.color = isError ? "#b42318" : "#68748a";
+}
 initSelects();renderBooks();renderStats();
