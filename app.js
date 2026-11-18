@@ -672,4 +672,36 @@ function renderBankQuestion() {
       ? "Hantar Jawapan"
       : "Seterusnya";
 }
+// Mula latihan Bank Soalan
+async function startBank() {
+  const button = $("bankStart");
+
+  button.disabled = true;
+
+  try {
+    await loadBankQuestions();
+
+    bankStarted = true;
+
+    $("bankQuestionStage").classList.remove("hidden");
+    $("bankResult").classList.add("hidden");
+
+    setBankStatus(
+      `Berjaya memuatkan ${bankQuestions.length} soalan.`
+    );
+
+    renderBankQuestion();
+
+  } catch (error) {
+    setBankStatus(error.message, true);
+
+    $("bankQuestionStage").classList.add("hidden");
+
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Butang mula latihan
+$("bankStart").addEventListener("click", startBank);
 initSelects();renderBooks();renderStats();
