@@ -109,7 +109,7 @@
           <div id="maSubStatus">Menyemak akses...</div>
           <div class="ma-access-row">
             <input id="maAccessCode" autocomplete="off" placeholder="Masukkan kod akses" aria-label="Kod akses">
-            <button id="maRedeem" type="button">Aktifkan kod</button>
+           <button id="maRedeem" type="button">Tebus Kod / Renew</button>
           </div>
           <div id="maRedeemStatus" class="ma-status" aria-live="polite"></div>
         </div>
@@ -862,11 +862,11 @@ async function refreshStudent() {
 const redeemStatus = $('maRedeemStatus');
 
 if (redeemRow) {
-  redeemRow.style.display = active ? 'none' : 'flex';
+  redeemRow.style.display = 'flex';
 }
 
 if (redeemStatus) {
-  redeemStatus.style.display = active ? 'none' : 'block';
+  redeemStatus.style.display = 'block';
 }
       const expiry = result?.expires_at;
 
@@ -1214,8 +1214,9 @@ async function init() {
       return;
     }
 
-    addNavAndPages();
-    injectAdmin();
+   addNavAndPages();
+injectAdmin();
+addMyLearningPanel();
 
     // Admin upload controls are hidden until Supabase confirms the admin role.
     showAdminUpload(false);
@@ -1259,7 +1260,8 @@ $('maQType')?.addEventListener('change', () => {
       // Restore anonymous student session for premium-code activation.
       try {
         await ensureStudentSession();
-        await refreshStudent();
+await refreshStudent();
+await refreshMyReports();
       } catch (error) {
         console.warn('Tidak dapat memulihkan sesi pelajar:', error.message);
       }
