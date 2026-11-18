@@ -35,3 +35,16 @@
     display: block;
     flex-shrink: 0;
 }
+/* FIX: Sidebar navigation scrolling */
+.sidebar {
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar > * {
+  flex-shrink: 0;
+}
