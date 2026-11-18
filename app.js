@@ -504,4 +504,172 @@ function setBankStatus(message, isError = false) {
   status.textContent = message;
   status.style.color = isError ? "#b42318" : "#68748a";
 }
+// Ambil soalan yang telah diterbitkan daripada Supabase
+async function loadBankQuestions() {
+  const client = getBankClient();
+
+  if (!client) {
+    throw new Error("Sambungan Supabase tidak tersedia.");
+  }
+
+  const level = $("bankLevel").value;
+  const subject = $("bankSubject").value;
+  const topic = $("bankTopic").value;
+
+  if (!level || !subject) {
+    throw new Error("Sila pilih tahap dan subjek dahulu.");
+  }
+
+  setBankStatus("Sedang mengambil soalan...");
+
+  const { data, error } = await client.rpc(
+    "get_student_questions",
+    {
+      p_school_level: level,
+      p_subject: subject,
+      p_topic: null,
+      p_limit: 50
+    }
+  );
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error("Belum ada soalan diterbitkan untuk pilihan ini.");
+  }
+
+  // Senaraikan topik yang tersedia
+  const topicSelect = $("bankTopic");
+  const selectedTopic = topic;
+
+  const topics = [...new Set(data.map(q => q.topic))].sort();
+
+  topicSelect.innerHTML =
+    '<option value="">Semua topik</option>' +
+    topics.map(t =>
+      `<option value="${t}">${t}</option>`
+    ).join("");
+
+  if (topics.includes(selectedTopic)) {
+    topicSelect.value = selectedTopic;
+  }
+
+  // Tapis mengikut topik pilihan
+  let filtered = topicSelect.value
+    ? data.filter(q => q.topic === topicSelect.value)
+    : data;
+
+  if (filtered.length === 0) {
+    throw new Error("Tiada soalan untuk topik yang dipilih.");
+  }
+
+  bankQuestions = filtered.slice(
+    0,
+    Number($("bankCount").value)
+  );
+
+  bankAnswers = Array(bankQuestions.length).fill(null);
+  bankIndex = 0;
+
+  return bankQuestions;
+}
+// Paparkan soalan semasa
+function renderBankQuestion() {
+  const q = bankQuestions[bankIndex];
+
+  if (!q) return;
+
+  $("bankQuestionStage").classList.remove("hidden");
+  $("bankResult").classList.add("hidden");
+
+  $("bankCounter").textContent =
+    `Soalan ${bankIndex + 1} / ${bankQuestions.length}`;
+
+  $("bankScore").textContent =
+    `Markah maksimum: ${bankQuestions.reduce(
+      (total, item) => total + Number(item.marks || 1), 0
+    )}`;
+
+  $("bankProgressBar").style.width =
+    `${((bankIndex + 1) / bankQuestions.length) * 100}%`;
+
+  const escapeHTML = value =>
+    String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[char]);
+
+  let content = `
+    <div class="question-meta">
+      ${escapeHTML(q.school_level)} ·
+      ${escapeHTML(q.subject)} ·
+      ${escapeHTML(q.topic)}
+    </div>
+
+    <div class="question-title">
+      ${escapeHTML(q.question_text)}
+    </div>
+
+    <p class="muted">
+      ${Number(q.marks || 1)} markah ·
+      ${escapeHTML(q.difficulty || "Sederhana")}
+    </p>
+  `;
+
+  if (q.question_type === "objective") {
+    const options = q.options || {};
+
+    content += `
+      <div class="bank-options">
+        ${["A", "B", "C", "D"].map(letter => `
+          <div
+            class="answer-option ${
+              bankAnswers[bankIndex] === letter ? "selected" : ""
+            }"
+            data-bank-answer="${letter}">
+            <span class="option-letter">${letter}</span>
+            ${escapeHTML(options[letter] || "")}
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    content += `
+      <label><b>Jawapan anda:</b></label>
+      <textarea
+        id="bankSubjectiveAnswer"
+        rows="4"
+        style="width:100%;padding:12px;margin-top:8px"
+        placeholder="Taip jawapan anda di sini..."
+      >${escapeHTML(bankAnswers[bankIndex] || "")}</textarea>
+    `;
+  }
+
+  $("bankQuestionArea").innerHTML = content;
+
+  // Pilihan jawapan objektif
+  document.querySelectorAll("[data-bank-answer]").forEach(option => {
+    option.addEventListener("click", () => {
+      bankAnswers[bankIndex] = option.dataset.bankAnswer;
+      renderBankQuestion();
+    });
+  });
+
+  // Jawapan subjektif
+  const subjectiveInput = $("bankSubjectiveAnswer");
+
+  if (subjectiveInput) {
+    subjectiveInput.addEventListener("input", () => {
+      bankAnswers[bankIndex] = subjectiveInput.value;
+    });
+  }
+
+  $("bankNext").textContent =
+    bankIndex === bankQuestions.length - 1
+      ? "Hantar Jawapan"
+      : "Seterusnya";
+}
 initSelects();renderBooks();renderStats();
