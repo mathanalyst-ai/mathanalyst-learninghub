@@ -653,6 +653,203 @@ async function refreshQuestionBank() {
     status.style.color = '#b42318';
   }
 }
+   
+function addMyLearningPanel() {
+  const page = document.getElementById("page-learning");
+  if (!page || document.getElementById("maMyReports")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "maMyReports";
+  panel.className = "panel";
+  panel.style.marginTop = "18px";
+
+  panel.innerHTML = `
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">SUPABASE CLOUD</span>
+        <h3>Laporan Latihan Saya</h3>
+      </div>
+      <button class="btn btn-ghost btn-small" id="maRefreshMyReports">
+        Muat semula
+      </button>
+    </div>
+
+    <div id="maMySubscription"></div>
+    <div id="maMyQuota"></div>
+    <div id="maMyReportStatus" class="ma-status">
+      Memuatkan laporan...
+    </div>
+    <div id="maMyReportRows"></div>
+  `;
+
+  page.appendChild(panel);
+
+  document.getElementById("maRefreshMyReports")
+    ?.addEventListener("click", refreshMyReports);
+}
+
+async function refreshMyReports() {
+  const status = document.getElementById("maMyReportStatus");
+  const output = document.getElementById("maMyReportRows");
+  const subscription = document.getElementById("maMySubscription");
+  const quota = document.getElementById("maMyQuota");
+
+  if (!status || !output) return;
+
+  status.textContent = "Sedang mengambil rekod latihan...";
+  output.innerHTML = "";
+
+  try {
+    const user = await ensureStudentSession();
+
+    const access = await checkAccess();
+    const accessData = Array.isArray(access) ? access[0] : access;
+    const premium = !!accessData?.active;
+
+    subscription.innerHTML = `
+      <div class="ma-access-box">
+        <b>Status akaun:</b>
+        <span style="color:${premium ? "#16865b" : "#b7791f"}">
+          ${premium ? "Langganan aktif" : "Pengguna percuma"}
+        </span>
+        <br>
+        <span class="ma-status">
+          ${premium
+            ? "Tarikh tamat: " +
+              (accessData.expires_at
+                ? new Date(accessData.expires_at).toLocaleDateString("ms-MY")
+                : "—")
+            : "Anda mempunyai 3 percubaan percuma bagi setiap jenis latihan."}
+        </span>
+      </div>
+    `;
+
+    const { data: usage, error: usageError } = await sb
+      .from("free_training_usage")
+      .select("training_type,attempts_used")
+      .eq("user_id", user.id);
+
+    if (usageError) throw usageError;
+
+    const used = { bank: 0, quiz: 0, exam: 0 };
+
+    (usage || []).forEach(item => {
+      if (Object.prototype.hasOwnProperty.call(used, item.training_type)) {
+        used[item.training_type] = Number(item.attempts_used || 0);
+      }
+    });
+
+    quota.innerHTML = `
+      <div class="ma-access-box">
+        <h4>Penggunaan kuota latihan</h4>
+        ${[
+          ["bank", "Bank Soalan"],
+          ["quiz", "Kuiz Interaktif"],
+          ["exam", "Exam Simulator"]
+        ].map(([key, label]) => `
+          <div class="ma-exercise">
+            <b>${label}</b>
+            <div class="ma-status">
+              ${premium
+                ? "Tanpa had — langganan aktif"
+                : `${used[key]} / 3 percubaan digunakan · ${Math.max(0, 3 - used[key])} berbaki`}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+
+    const [exerciseResult, bankResult] = await Promise.all([
+      sb.from("exercise_attempts")
+        .select("score,max_score,answers,submitted_at")
+        .eq("student_id", user.id)
+        .order("submitted_at", { ascending: false })
+        .limit(200),
+
+      sb.from("question_bank_attempts")
+        .select("subject,school_level,topic,score,max_score,correct_answers,total_questions,submitted_at")
+        .eq("student_id", user.id)
+        .order("submitted_at", { ascending: false })
+        .limit(200)
+    ]);
+
+    if (exerciseResult.error) throw exerciseResult.error;
+    if (bankResult.error) throw bankResult.error;
+
+    const records = [
+      ...(exerciseResult.data || []).map(item => ({
+        type: item.answers?.type || "Latihan",
+        subject: item.answers?.subject || "—",
+        score: Number(item.score || 0),
+        max: Number(item.max_score || 0),
+        date: item.submitted_at
+      })),
+
+      ...(bankResult.data || []).map(item => ({
+        type: "Bank Soalan",
+        subject: item.subject || "—",
+        score: Number(item.score || 0),
+        max: Number(item.max_score || 0),
+        date: item.submitted_at
+      }))
+    ].sort((a, b) =>
+      new Date(b.date || 0) - new Date(a.date || 0)
+    );
+
+    if (!records.length) {
+      status.textContent = "Belum ada rekod latihan dalam talian.";
+      return;
+    }
+
+    status.textContent = `Jumlah rekod latihan: ${records.length}`;
+
+    output.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:10px">Jenis latihan</th>
+              <th style="text-align:left;padding:10px">Subjek</th>
+              <th style="text-align:center;padding:10px">Markah</th>
+              <th style="text-align:left;padding:10px">Tarikh</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${records.map(item => {
+              const percentage = item.max > 0
+                ? Math.round(item.score / item.max * 100)
+                : 0;
+
+              return `
+                <tr>
+                  <td style="padding:10px;border-top:1px solid #e8ecf2">
+                    ${esc(item.type)}
+                  </td>
+                  <td style="padding:10px;border-top:1px solid #e8ecf2">
+                    ${esc(item.subject)}
+                  </td>
+                  <td style="padding:10px;text-align:center;border-top:1px solid #e8ecf2">
+                    <b>${percentage}%</b>
+                  </td>
+                  <td style="padding:10px;border-top:1px solid #e8ecf2">
+                    ${item.date
+                      ? esc(new Date(item.date).toLocaleString("ms-MY"))
+                      : "—"}
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+  } catch (error) {
+    status.textContent = "Gagal memuatkan laporan: " + error.message;
+    status.style.color = "#b42318";
+  }
+}
+
 async function refreshStudent() {
     const sub = $('maSubStatus');
     const list = $('maExerciseList');
