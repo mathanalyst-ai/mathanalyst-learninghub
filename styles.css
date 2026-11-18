@@ -132,7 +132,13 @@ button {
   margin: 2px 0;
   flex-shrink: 0;
 }
-
+/* Pastikan menu sidebar tidak mengecil */
+.sidebar .nav-item,
+.sidebar .side-label,
+.sidebar .brand,
+.sidebar .sidebar-bottom {
+  flex-shrink: 0;
+}
 .nav-item span {
   font-size: 13px;
 }
