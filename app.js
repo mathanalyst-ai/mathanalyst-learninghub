@@ -163,7 +163,16 @@ function navigate(page){
  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
  $("page-"+page).classList.add("active");
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
- const names={home:"Dashboard",books:"Kedai Buku",quiz:"Kuiz Interaktif",exam:"Exam Simulator",classes:"Kelas Online",learning:"Pembelajaran Saya",admin:"Admin Demo"};
+const names={
+  home:"Dashboard",
+  books:"Kedai Buku",
+  quiz:"Kuiz Interaktif",
+  exam:"Exam Simulator",
+  classes:"Kelas Online",
+  learning:"Pembelajaran Saya",
+  bank:"Bank Soalan",
+  admin:"Admin Demo"
+};
  $("pageTitle").textContent=names[page]||"Math Analyst";
  $("mainNav").parentElement.classList.remove("open");
  if(page==="learning")renderHistory();if(page==="admin")renderAdminQuestions();if(page==="home")renderStats();
@@ -735,6 +744,65 @@ $("bankQuit").addEventListener("click", () => {
 
   setBankStatus("Latihan telah dihentikan.");
 });
+// Muat senarai topik mengikut tahap dan subjek
+async function refreshBankTopics() {
+  const level = $("bankLevel").value;
+  const subject = $("bankSubject").value;
+  const topicSelect = $("bankTopic");
+
+  topicSelect.innerHTML =
+    '<option value="">Semua topik</option>';
+
+  if (!level || !subject) return;
+
+  setBankStatus("Sedang memuatkan senarai topik...");
+
+  try {
+    const client = getBankClient();
+
+    const { data, error } = await client.rpc(
+      "get_student_questions",
+      {
+        p_school_level: level,
+        p_subject: subject,
+        p_topic: null,
+        p_limit: 50
+      }
+    );
+
+    if (error) throw error;
+
+    const topics = [
+      ...new Set((data || []).map(q => q.topic).filter(Boolean))
+    ].sort();
+
+    topicSelect.innerHTML =
+      '<option value="">Semua topik</option>' +
+      topics.map(topic =>
+        `<option value="${topic}">${topic}</option>`
+      ).join("");
+
+    setBankStatus(
+      topics.length
+        ? `${topics.length} topik tersedia.`
+        : "Belum ada topik diterbitkan untuk pilihan ini."
+    );
+
+  } catch (error) {
+    setBankStatus(error.message, true);
+  }
+}
+
+// Kemas kini topik apabila pilihan berubah
+$("bankLevel").addEventListener(
+  "change",
+  refreshBankTopics
+);
+
+$("bankSubject").addEventListener(
+  "change",
+  refreshBankTopics
+);
 // Hantar jawapan Bank Soalan ke Supabase
 async function submitBankAnswers() {
   const client = getBankClient();
