@@ -107,7 +107,60 @@ let examSet=[], examIndex=0, examAnswers=[], examStarted=0, examInterval=null, e
 const $ = id => document.getElementById(id);
 function save(){localStorage.setItem("ma_questions",JSON.stringify(questions));localStorage.setItem("ma_history",JSON.stringify(history));}
 // MATH ANALYST: SIMPAN LAPORAN KE SUPABASE
+
 async function saveAttemptToCloud(record) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+
+  if (!client) {
+    console.error("Supabase client tidak tersedia.");
+    return false;
+  }
+
+  try {
+    let { data: { session }, error } = await client.auth.getSession();
+    if (error) throw error;
+
+    if (!session) {
+      const result = await client.auth.signInAnonymously();
+      if (result.error) throw result.error;
+    }
+
+    const trainingType =
+      record.type === "Kuiz" ? "quiz" :
+      record.type === "Exam Simulator" ? "exam" : null;
+
+    if (!trainingType) {
+      throw new Error("Jenis latihan tidak dikenali.");
+    }
+
+    const { data, error: saveError } = await client.rpc(
+      "submit_exercise_attempt",
+      {
+        p_training_type: trainingType,
+        p_record: record
+      }
+    );
+
+    if (saveError) throw saveError;
+
+    console.log("Laporan berjaya disimpan:", data);
+    return true;
+
+  } catch (error) {
+    console.error("Gagal menyimpan laporan:", error.message);
+
+    if (error.message.includes("Kuota percuma")) {
+      alert(
+        "Kuota percuma anda telah habis.\n\n" +
+        "Sila langgan pakej 1 bulan atau 3 bulan untuk meneruskan latihan."
+      );
+    }
+
+    return false;
+  }
+}
+
   const client = window.supabaseClient ||
     (typeof supabaseClient !== "undefined" ? supabaseClient : null);
 
