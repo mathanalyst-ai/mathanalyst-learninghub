@@ -185,8 +185,54 @@ function renderBooks(){
  $("bookGrid").innerHTML=defaultBooks.map((b,i)=>`<article class="book-card"><div class="book-cover"><span>${b.label}<br><small style="font:500 9px 'DM Sans';letter-spacing:2px">MATH ANALYST</small></span></div><div class="book-info"><h3>${b.title}</h3><p>${b.desc}</p><div class="price">${b.price}</div><button class="btn btn-primary book-enquire" data-book="${i}">Tanya / Beli</button></div></article>`).join("");
  document.querySelectorAll(".book-enquire").forEach(b=>b.addEventListener("click",()=>alert("Pautan Shopee dan WhatsApp akan dimasukkan selepas maklumat produk diberikan.")));
 }
+
+async function checkTrainingQuota(trainingType) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+
+  if (!client) {
+    alert("Sambungan sistem tidak tersedia. Sila cuba lagi.");
+    return false;
+  }
+
+  try {
+    let { data: { session }, error } = await client.auth.getSession();
+    if (error) throw error;
+
+    if (!session) {
+      const result = await client.auth.signInAnonymously();
+      if (result.error) throw result.error;
+    }
+
+    const { data, error: quotaError } = await client.rpc(
+      "check_training_quota",
+      { p_training_type: trainingType }
+    );
+
+    if (quotaError) throw quotaError;
+
+    if (!data.allowed) {
+      alert(
+        "Kuota percuma anda telah habis untuk latihan ini.\n\n" +
+        "Langgan pakej Math Analyst 1 bulan atau 3 bulan " +
+        "untuk meneruskan latihan."
+      );
+      return false;
+    }
+
+    return true;
+
+  } catch (error) {
+    console.error("Semakan kuota gagal:", error.message);
+    alert("Tidak dapat menyemak kuota. Sila cuba lagi.");
+    return false;
+  }
+}
+
 function getFiltered(level,subject,topic){return questions.filter(q=>(!level||q.level===level)&&(!subject||q.subject===subject)&&(!topic||q.topic===topic));}
-function startQuiz(){
+async function startQuiz(){
+  const quotaAllowed = await checkTrainingQuota("quiz");
+  if (!quotaAllowed) return;
  const level=$("quizLevel").value,subject=$("quizSubject").value,topic=$("quizTopic").value;
  let pool=getFiltered(level,subject,topic);
  if(!pool.length)pool=questions.filter(q=>q.level===level&&q.subject===subject);
@@ -294,7 +340,9 @@ function finishQuiz(){
     }
   });
 }
-function startExam(){
+async function startExam(){
+  const quotaAllowed = await checkTrainingQuota("exam");
+  if (!quotaAllowed) return;
  const level=$("examLevel").value,subject=$("examSubject").value;
  let pool=questions.filter(q=>q.level===level&&q.subject===subject);
  if(!pool.length){alert("Belum ada set contoh untuk kombinasi ini. Tambah soalan melalui Admin Demo.");return;}
@@ -687,7 +735,10 @@ async function startBank() {
 
   button.disabled = true;
 
-  try {
+ try {
+    const quotaAllowed = await checkTrainingQuota("bank");
+    if (!quotaAllowed) return;
+
     await loadBankQuestions();
 
     bankStarted = true;
