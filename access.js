@@ -240,10 +240,18 @@
             </div>
 
             <div id="maQSubjectiveFields" style="display:none;margin-top:12px">
-              <label for="maQExpected"><b>Skema jawapan</b></label>
-              <textarea id="maQExpected" rows="4"
-                style="width:100%;padding:10px;margin:8px 0"
-                placeholder="Masukkan jawapan contoh atau skema pemarkahan..."></textarea>
+             
+<label for="maQExpected"><b>Skema jawapan diterima</b></label>
+
+<p class="ma-status">
+  Untuk pemarkahan automatik, masukkan setiap variasi jawapan pada baris berasingan.
+  Contoh: 5, 5.0 dan x = 5.
+</p>
+
+<textarea id="maQExpected" rows="5"
+  style="width:100%;padding:10px;margin:8px 0"
+  placeholder="5&#10;5.0&#10;x = 5"></textarea>
+
             </div>
 
             <label for="maQExplanation"><b>Penerangan / Jalan kerja</b></label>
