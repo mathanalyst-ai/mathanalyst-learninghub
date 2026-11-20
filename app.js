@@ -161,48 +161,7 @@ async function saveAttemptToCloud(record) {
   }
 }
 
-  const client = window.supabaseClient ||
-    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
 
-  if (!client) {
-    console.error("Supabase client tidak tersedia.");
-    return false;
-  }
-
-  try {
-    let { data: { session }, error } = await client.auth.getSession();
-    if (error) throw error;
-
-    if (!session) {
-      const result = await client.auth.signInAnonymously();
-      if (result.error) throw result.error;
-      session = result.data.session;
-    }
-
-    if (!session?.user?.id) {
-      throw new Error("Identiti pelajar tidak tersedia.");
-    }
-
-    const { error: saveError } = await client
-      .from("exercise_attempts")
-      .insert({
-        exercise_id: null,
-        student_id: session.user.id,
-        score: record.correct,
-        max_score: record.total,
-        answers: record
-      });
-
-    if (saveError) throw saveError;
-
-    console.log("Laporan berjaya disimpan.");
-    return true;
-
-  } catch (error) {
-    console.error("Gagal menyimpan laporan:", error.message);
-    return false;
-  }
-}
 function fillSelect(el,values){el.innerHTML=values.map(v=>`<option>${v}</option>`).join("");}
 function initSelects(){
  fillSelect($("quizLevel"),LEVELS);fillSelect($("adminLevel"),LEVELS);
