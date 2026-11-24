@@ -1,1331 +1,1530 @@
-/* Math Analyst Learning Hub
-   Integrasi akses premium dan portal admin.
-   Muat selepas app.js. Memerlukan Supabase JS v2 dan supabase-config.js.
-*/
-(() => {
-  'use strict';
+// =============================================
+// MATH ANALYST LEARNING HUB - APP.JS
+// =============================================
 
-  const sb = (typeof supabaseClient !== 'undefined') ? supabaseClient : window.supabaseClient;
-  const BUCKET = 'html-exercises';
-  const $ = (id) => document.getElementById(id);
-   let editingQuestionId = null;
-   let editingQuestionStatus = 'draft';
+// SUPABASE CONNECTION
+const MA_BUCKET = "html-exercises";
 
-  const esc = (value = '') => String(value).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
+async function uploadHtmlExercise(file, metadata) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
 
-  const style = document.createElement('style');
-  style.textContent = `
-    .ma-access-box{background:#fff;border:1px solid #e8ecf2;border-radius:14px;padding:20px;margin:16px 0}
-    .ma-access-row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:10px 0}
-    .ma-access-box input,.ma-access-box select{padding:10px;border:1px solid #dfe4ed;border-radius:8px;min-width:180px;max-width:100%}
-    .ma-access-box button{border:0;border-radius:8px;padding:10px 14px;background:#6857e8;color:#fff;font-weight:700;cursor:pointer}
-    .ma-access-box button:disabled{opacity:.55;cursor:wait}
-    .ma-access-box button.secondary{background:#edf0f6;color:#263348}
-    .ma-status{font-size:12px;color:#68748a;margin-top:8px;white-space:pre-wrap}
-    .ma-code{font:800 19px monospace;letter-spacing:1px;background:#f3f1ff;padding:12px;border-radius:8px;word-break:break-all}
-    .ma-exercise{padding:13px 0;border-bottom:1px solid #e8ecf2}
-    .ma-exercise:last-child{border:0}
-    .ma-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-    #page-admin .html-upload-panel{display:none}
-    @media(max-width:700px){.ma-admin-grid{grid-template-columns:1fr}}
-  `;
-  document.head.appendChild(style);
+  if (!client) throw new Error("Supabase client tidak tersedia.");
 
-  function setStatus(element, message, isError = false) {
-    if (!element) return;
-    element.textContent = message;
-    element.style.color = isError ? '#b42318' : '#68748a';
+  if (!file || !/\.html?$/i.test(file.name)) {
+    throw new Error("Sila pilih fail HTML yang sah.");
   }
 
-  async function ensureStudentSession() {
-    if (!sb) throw new Error('Supabase client tiada. Semak supabase-config.js.');
-    const { data: sessionData, error: sessionError } = await sb.auth.getSession();
-    if (sessionError) throw sessionError;
-
-    let session = sessionData.session;
-    if (!session) {
-      const { data, error } = await sb.auth.signInAnonymously();
-      if (error) throw error;
-      session = data.session;
-    }
-    if (!session) throw new Error('Tidak dapat menyediakan sesi pelajar.');
-    return session.user;
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("Saiz fail maksimum ialah 5 MB.");
   }
 
-  async function isAdmin() {
-    if (!sb) return false;
-    const { data: userData, error: userError } = await sb.auth.getUser();
-    if (userError) throw userError;
-    if (!userData.user) return false;
+  if (!metadata.title || !metadata.school_level || !metadata.subject) {
+    throw new Error("Sila lengkapkan tajuk, tahap dan subjek.");
+  }
 
-    const { data, error } = await sb
-      .from('profiles')
-      .select('role')
-      .eq('id', userData.user.id)
-      .maybeSingle();
+  const { data: userData, error: userError } = await client.auth.getUser();
 
+  if (userError || !userData.user) {
+    throw new Error("Sila log masuk sebagai admin dahulu.");
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `${Date.now()}_${safeName}`;
+
+  const { data, error } = await client.storage
+    .from(MA_BUCKET)
+    .upload(storagePath, file, {
+      contentType: "text/html",
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: record, error: dbError } = await client
+    .from("html_exercises")
+    .insert({
+      title: metadata.title,
+      description: metadata.description || "",
+      school_level: metadata.school_level,
+      subject: metadata.subject,
+      topic: metadata.topic || "",
+      storage_path: data.path,
+      status: "draft"
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    await client.storage.from(MA_BUCKET).remove([data.path]);
+    throw dbError;
+  }
+
+  return record;
+}
+
+// =============================================
+// DATA ASAS
+// =============================================
+
+const LEVELS = [
+  "Prasekolah 4 tahun",
+  "Prasekolah 5 tahun",
+  "Prasekolah 6 tahun",
+  "Tahun 1",
+  "Tahun 2",
+  "Tahun 3",
+  "Tahun 4",
+  "Tahun 5",
+  "Tahun 6",
+  "Form 1",
+  "Form 2",
+  "Form 3",
+  "Form 4",
+  "Form 5"
+];
+
+const SUBJECTS = {
+  "Prasekolah 4 tahun": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Prasekolah 5 tahun": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Prasekolah 6 tahun": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 1": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 2": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 3": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 4": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 5": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Tahun 6": ["Matematik", "Sains", "Bahasa Melayu", "Bahasa Inggeris"],
+  "Form 1": ["Matematik", "Sains"],
+  "Form 2": ["Matematik", "Sains"],
+  "Form 3": ["Matematik", "Sains"],
+  "Form 4": ["Matematik", "Additional Mathematics"],
+  "Form 5": ["Matematik", "Additional Mathematics"]
+};
+
+const TOPICS = [
+  "Nombor dan Operasi",
+  "Algebra",
+  "Geometri",
+  "Pecahan dan Perpuluhan",
+  "Pengukuran",
+  "Data dan Kebarangkalian",
+  "Fungsi dan Graf",
+  "Trigonometri"
+];
+
+const sampleQuestions = [
+  {
+    level: "Tahun 4",
+    subject: "Matematik",
+    topic: "Nombor dan Operasi",
+    q: "Berapakah nilai 245 + 137?",
+    options: ["372", "382", "392", "402"],
+    answer: 1,
+    explanation: "245 + 137 = 382."
+  },
+  {
+    level: "Tahun 4",
+    subject: "Matematik",
+    topic: "Algebra",
+    q: "Jika x + 8 = 15, apakah nilai x?",
+    options: ["5", "6", "7", "8"],
+    answer: 2,
+    explanation: "Tolak 8 pada kedua-dua belah: x = 15 − 8 = 7."
+  },
+  {
+    level: "Tahun 4",
+    subject: "Matematik",
+    topic: "Geometri",
+    q: "Berapakah jumlah sudut dalam sebuah segi tiga?",
+    options: ["90°", "180°", "270°", "360°"],
+    answer: 1,
+    explanation: "Jumlah sudut pedalaman segi tiga ialah 180°."
+  },
+  {
+    level: "Form 1",
+    subject: "Matematik",
+    topic: "Algebra",
+    q: "Permudahkan 3x + 2x − 4.",
+    options: ["5x − 4", "6x − 4", "5x + 4", "x − 4"],
+    answer: 0,
+    explanation: "Gabungkan sebutan serupa: 3x + 2x = 5x."
+  },
+  {
+    level: "Form 2",
+    subject: "Matematik",
+    topic: "Geometri",
+    q: "Sebuah sudut pada garis lurus ialah 125°. Cari sudut bersebelahan.",
+    options: ["45°", "55°", "65°", "75°"],
+    answer: 1,
+    explanation: "Sudut pada garis lurus berjumlah 180°. 180° − 125° = 55°."
+  },
+  {
+    level: "Form 3",
+    subject: "Matematik",
+    topic: "Algebra",
+    q: "Selesaikan 2x − 7 = 9.",
+    options: ["6", "7", "8", "9"],
+    answer: 2,
+    explanation: "2x = 16, maka x = 8."
+  },
+  {
+    level: "Form 4",
+    subject: "Additional Mathematics",
+    topic: "Fungsi dan Graf",
+    q: "Jika f(x) = 2x + 3, cari f(4).",
+    options: ["8", "9", "10", "11"],
+    answer: 3,
+    explanation: "f(4) = 2(4) + 3 = 11."
+  },
+  {
+    level: "Form 5",
+    subject: "Matematik",
+    topic: "Trigonometri",
+    q: "Nilai sin 30° ialah…",
+    options: ["0", "1/2", "√2/2", "1"],
+    answer: 1,
+    explanation: "Sudut istimewa: sin 30° = 1/2."
+  },
+  {
+    level: "Tahun 5",
+    subject: "Sains",
+    topic: "Nombor dan Operasi",
+    q: "Antara berikut, yang manakah sumber tenaga boleh baharu?",
+    options: ["Arang batu", "Petroleum", "Tenaga suria", "Gas asli"],
+    answer: 2,
+    explanation: "Tenaga suria diperoleh daripada cahaya matahari dan boleh diperbaharui."
+  },
+  {
+    level: "Tahun 4",
+    subject: "Bahasa Melayu",
+    topic: "Nombor dan Operasi",
+    q: "Pilih kata nama am.",
+    options: ["Ali", "Malaysia", "sekolah", "Isnin"],
+    answer: 2,
+    explanation: "'Sekolah' ialah kata nama am."
+  }
+];
+
+const defaultBooks = [
+  {
+    title: "Kuasai Algebra Berajah",
+    desc: "Latihan algebra berajah untuk membina kefahaman konsep.",
+    price: "RM16.90",
+    label: "ALGEBRA"
+  },
+  {
+    title: "Mini Modul Algebra",
+    desc: "Modul ringkas bersaiz A5 untuk latihan kendiri.",
+    price: "—",
+    label: "MINI MODUL"
+  },
+  {
+    title: "Mini Modul Geometri",
+    desc: "Koleksi latihan geometri dan kemahiran penyelesaian masalah.",
+    price: "—",
+    label: "GEOMETRI"
+  },
+  {
+    title: "Mind Booster Mathematics",
+    desc: "Latihan Matematik dwibahasa untuk Tahap 2.",
+    price: "—",
+    label: "MIND BOOSTER"
+  }
+];
+
+let questions =
+  JSON.parse(localStorage.getItem("ma_questions") || "null") ||
+  sampleQuestions.slice();
+
+let history = JSON.parse(localStorage.getItem("ma_history") || "[]");
+
+let quizSet = [];
+let quizIndex = 0;
+let quizAnswers = [];
+let quizStarted = 0;
+let quizInterval = null;
+
+let examSet = [];
+let examIndex = 0;
+let examAnswers = [];
+let examStarted = 0;
+let examInterval = null;
+let examSeconds = 1800;
+let examMode = "practice";
+
+const $ = id => document.getElementById(id);
+
+function save() {
+  localStorage.setItem("ma_questions", JSON.stringify(questions));
+  localStorage.setItem("ma_history", JSON.stringify(history));
+}
+
+// =============================================
+// SIMPAN LAPORAN KE SUPABASE
+// =============================================
+
+async function saveAttemptToCloud(record) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+
+  if (!client) {
+    console.error("Supabase client tidak tersedia.");
+    return false;
+  }
+
+  try {
+    const { data: sessionData, error } = await client.auth.getSession();
     if (error) throw error;
-    return data?.role === 'admin';
-  }
 
-  async function checkAccess() {
-    await ensureStudentSession();
-    const { data, error } = await sb.rpc('check_student_access');
-    if (error) throw error;
-    return data;
-  }
+    const session = sessionData?.session;
 
-  function showAdminUpload(show) {
-    const panel = document.querySelector('#page-admin .html-upload-panel');
-    if (panel) panel.style.display = show ? 'block' : 'none';
-  }
-
-  function addNavAndPages() {
-    const nav = $('mainNav');
-    if (nav && !$('navPremium')) {
-      const button = document.createElement('button');
-      button.className = 'nav-item';
-      button.id = 'navPremium';
-      button.dataset.page = 'practice';
-      button.innerHTML = '🔒 <span>Latihan Premium</span>';
-      nav.appendChild(button);
-      button.addEventListener('click', () => window.navigateMA('practice'));
+    if (!session || session.user?.is_anonymous) {
+      throw new Error(
+        "Sila log masuk menggunakan Google sebelum menyimpan rekod."
+      );
     }
 
-    const main = document.querySelector('.main');
-    if (main && !$('page-practice')) {
-      const section = document.createElement('section');
-      section.id = 'page-practice';
-      section.className = 'page';
-      section.innerHTML = `
-        <div class="page-intro">
-          <h2>Latihan Interaktif Premium</h2>
-          <p>Masukkan kod akses untuk membuka latihan yang diterbitkan.</p>
-        </div>
-        <div class="ma-access-box">
-          <h3>Status akses</h3>
-          <div id="maSubStatus">Menyemak akses...</div>
-          <div class="ma-access-row">
-            <input id="maAccessCode" autocomplete="off" placeholder="Masukkan kod akses" aria-label="Kod akses">
-           <button id="maRedeem" type="button">Tebus Kod / Renew</button>
-          </div>
-          <div id="maRedeemStatus" class="ma-status" aria-live="polite"></div>
-        </div>
-        <div class="ma-access-box">
-          <h3>Senarai latihan tersedia</h3>
-          <div id="maExerciseList">Memuatkan latihan...</div>
-        </div>`;
-      const footer = main.querySelector('footer');
-      main.insertBefore(section, footer || null);
+    const trainingType =
+      record.type === "Kuiz" ? "quiz" :
+      record.type === "Exam Simulator" ? "exam" : null;
+
+    if (!trainingType) {
+      throw new Error("Jenis latihan tidak dikenali.");
     }
+
+    const { data, error: saveError } = await client.rpc(
+      "submit_exercise_attempt",
+      {
+        p_training_type: trainingType,
+        p_record: record
+      }
+    );
+
+    if (saveError) throw saveError;
+
+    console.log("Laporan berjaya disimpan:", data);
+    return true;
+
+  } catch (error) {
+    console.error("Gagal menyimpan laporan:", error.message);
+
+    if (error.message.includes("Kuota percuma")) {
+      alert(
+        "Kuota percuma anda telah habis.\n\n" +
+        "Sila langgan pakej 1 bulan atau 3 bulan untuk meneruskan latihan."
+      );
+    }
+
+    return false;
   }
+}
 
-  function injectAdmin() {
-    const page = $('page-admin');
-    if (!page || $('maAdminPanel')) return;
+// =============================================
+// DROPDOWN DAN NAVIGASI
+// =============================================
 
-    const panel = document.createElement('div');
-    panel.id = 'maAdminPanel';
-    panel.className = 'ma-access-box';
+function fillSelect(element, values) {
+  element.innerHTML = values
+    .map(value => `<option>${value}</option>`)
+    .join("");
+}
 
-    panel.innerHTML = `
-      <h2>Portal Admin Math Analyst</h2>
+function initSelects() {
+  fillSelect($("quizLevel"), LEVELS);
+  fillSelect($("adminLevel"), LEVELS);
 
-      <div id="maAdminLogin">
-        <p>Login menggunakan akaun Supabase yang telah diberikan role <b>admin</b>.</p>
-        <div class="ma-access-row">
-          <input id="maAdminEmail" type="email" autocomplete="username" placeholder="E-mel admin">
-          <input id="maAdminPassword" type="password" autocomplete="current-password" placeholder="Kata laluan">
-          <button id="maAdminSignIn" type="button">Login Admin</button>
-        </div>
-        <div id="maAdminLoginStatus" class="ma-status" aria-live="polite"></div>
-      </div>
+  updateSubjects($("quizLevel").value, $("quizSubject"));
+  updateSubjects($("adminLevel").value, $("adminSubject"));
 
-      <div id="maAdminTools" class="hidden">
-        <div class="ma-access-row">
-          <b id="maAdminWho">Admin aktif</b>
-          <button class="secondary" id="maAdminSignOut" type="button">Log keluar</button>
-        </div>
+  fillSelect($("quizTopic"), TOPICS);
 
-        <div class="ma-admin-grid">
-          <div class="ma-access-box">
-            <h3>Jana kod akses</h3>
-            <label for="maCodeDuration">Tempoh akses</label>
-            <div class="ma-access-row">
-              <select id="maCodeDuration">
-                <option value="30">30 hari</option>
-                <option value="90">90 hari</option>
-              </select>
-              <button id="maCreateCode" type="button">Jana kod baharu</button>
-            </div>
-            <div id="maGeneratedCode"></div>
-            <div class="ma-status">Kod dipaparkan sekali sahaja. Salin dan simpan sebelum menutup halaman.</div>
-          </div>
+  $("quizLevel").addEventListener("change", () => {
+    updateSubjects($("quizLevel").value, $("quizSubject"));
+  });
 
-          <div class="ma-access-box">
-            <h3>Latihan HTML</h3>
-            <p class="ma-status">Muat naik latihan melalui panel Pengurusan Latihan HTML di bawah. Latihan baharu disimpan sebagai DRAFT.</p>
-            <button id="maRefreshExercises" type="button">Muat semula senarai</button>
-            <div id="maAdminExercises"></div>
-          </div>
-        </div>
+  $("adminLevel").addEventListener("change", () => {
+    updateSubjects($("adminLevel").value, $("adminSubject"));
+  });
+}
 
-        <div id="maAdminReports" class="ma-access-box" style="margin-top:18px">
-          <h3>Laporan Prestasi Pelajar</h3>
-          <p class="ma-status">Analisis keputusan kuiz dan peperiksaan semua pelajar.</p>
-          <button id="maRefreshReports" type="button">Muat semula laporan</button>
-          <div id="maReportStatus" class="ma-status">Tekan muat semula untuk melihat laporan.</div>
-          <div id="maReportSummary"></div>
-          <div id="maReportRows"></div>
-        </div>
-                <div id="maQuestionPanel" class="ma-access-box" style="margin-top:18px">
-          <h3>Bank Soalan Math Analyst</h3>
-          <p class="ma-status">Masukkan soalan objektif atau subjektif ke dalam bank soalan.</p>
+function updateSubjects(level, element) {
+  fillSelect(element, SUBJECTS[level] || ["Matematik"]);
+}
 
-          <form id="maQuestionForm">
-
-            <div class="ma-access-row">
-              <select id="maQSubject" required>
-                <option value="">Pilih subjek</option>
-                <option value="Matematik">Matematik</option>
-                <option value="Sains">Sains</option>
-                <option value="Additional Mathematics">Additional Mathematics</option>
-              </select>
-
-              <select id="maQLevel" required>
-                <option value="">Pilih tahun / tingkatan</option>
-                <option value="Tahun 4">Tahun 4</option>
-                <option value="Tahun 5">Tahun 5</option>
-                <option value="Tahun 6">Tahun 6</option>
-                <option value="Tingkatan 1">Tingkatan 1</option>
-                <option value="Tingkatan 2">Tingkatan 2</option>
-                <option value="Tingkatan 3">Tingkatan 3</option>
-                <option value="Tingkatan 4">Tingkatan 4</option>
-                <option value="Tingkatan 5">Tingkatan 5</option>
-              </select>
-            </div>
-
-            <div class="ma-access-row">
-              <input id="maQTopic" type="text" placeholder="Nama topik" required>
-
-              <select id="maQType" required>
-                <option value="objective">Objektif</option>
-                <option value="subjective">Subjektif</option>
-              </select>
-            </div>
-
-            <label for="maQText"><b>Soalan</b></label>
-            <textarea id="maQText" rows="4"
-              style="width:100%;padding:10px;margin:8px 0"
-              placeholder="Masukkan soalan di sini..." required></textarea>
-
-            <div id="maQObjectiveFields">
-              <h4>Pilihan jawapan</h4>
-
-              <input id="maQOptionA" placeholder="Pilihan A">
-              <input id="maQOptionB" placeholder="Pilihan B">
-              <input id="maQOptionC" placeholder="Pilihan C">
-              <input id="maQOptionD" placeholder="Pilihan D">
-
-              <label for="maQCorrect"><b>Jawapan betul</b></label>
-              <select id="maQCorrect">
-                <option value="">Pilih jawapan</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-              </select>
-            </div>
-
-            <div id="maQSubjectiveFields" style="display:none;margin-top:12px">
-             
-<label for="maQExpected"><b>Skema jawapan diterima</b></label>
-
-<p class="ma-status">
-  Untuk pemarkahan automatik, masukkan setiap variasi jawapan pada baris berasingan.
-  Contoh: 5, 5.0 dan x = 5.
-</p>
-
-<textarea id="maQExpected" rows="5"
-  style="width:100%;padding:10px;margin:8px 0"
-  placeholder="5&#10;5.0&#10;x = 5"></textarea>
-
-            </div>
-
-            <label for="maQExplanation"><b>Penerangan / Jalan kerja</b></label>
-            <textarea id="maQExplanation" rows="4"
-              style="width:100%;padding:10px;margin:8px 0"
-              placeholder="Masukkan jalan kerja atau penerangan..."></textarea>
-
-            <div class="ma-access-row">
-              <input id="maQMarks" type="number" min="1" value="1"
-                placeholder="Markah">
-
-              <select id="maQDifficulty">
-                <option value="Mudah">Mudah</option>
-                <option value="Sederhana" selected>Sederhana</option>
-                <option value="Sukar">Sukar</option>
-              </select>
-            </div>
-
-            <button id="maQSave" type="submit">Simpan Soalan</button>
-            <div id="maQStatus" class="ma-status" aria-live="polite"></div>
-
-          </form>
-          <div class="ma-access-box" style="margin-top:18px">
-  <h3>Senarai Bank Soalan</h3>
-
-  <div class="ma-access-row">
-    <select id="maQuestionFilter">
-      <option value="">Semua subjek</option>
-      <option value="Matematik">Matematik</option>
-      <option value="Sains">Sains</option>
-      <option value="Additional Mathematics">Additional Mathematics</option>
-    </select>
-
-    <button id="maRefreshQuestions" type="button">
-      Muat semula soalan
-    </button>
-  </div>
-
-  <div id="maQuestionListStatus" class="ma-status">
-    Senarai soalan belum dimuatkan.
-  </div>
-
-  <div id="maQuestionList"></div>
-</div>
-        </div>
-      </div>
-    `;
-
-    page.appendChild(panel);
-  }
-   
-async function saveQuestion(event) {
-  event.preventDefault();
-
-  const form = $('maQuestionForm');
-  const status = $('maQStatus');
-  const button = $('maQSave');
-
-  if (!form || !status || !button) return;
-
-  const type = $('maQType').value;
-
-  const question = $('maQText').value.trim();
-  const topic = $('maQTopic').value.trim();
-
-  let options = [];
-  let correctAnswer = null;
-  let expectedAnswer = null;
-
-  if (type === 'objective') {
-    options = {
-      A: $('maQOptionA').value.trim(),
-      B: $('maQOptionB').value.trim(),
-      C: $('maQOptionC').value.trim(),
-      D: $('maQOptionD').value.trim()
-    };
-
-    correctAnswer = $('maQCorrect').value;
-
-    if (Object.values(options).some(value => !value)) {
-      setStatus(status, 'Sila lengkapkan semua pilihan A hingga D.', true);
-      return;
-    }
-
-    if (!correctAnswer) {
-      setStatus(status, 'Sila pilih jawapan yang betul.', true);
-      return;
-    }
-  } else {
-    expectedAnswer = $('maQExpected').value.trim();
-
-    if (!expectedAnswer) {
-      setStatus(status, 'Sila masukkan skema jawapan.', true);
-      return;
-    }
-  }
-
-  const marks = Number($('maQMarks').value);
-
-  if (!Number.isInteger(marks) || marks < 1) {
-    setStatus(status, 'Markah mestilah nombor bulat sekurang-kurangnya 1.', true);
+function navigate(page) {
+  const target = $("page-" + page);
+  if (!target) {
+    console.warn("Halaman tidak dijumpai:", page);
     return;
   }
 
-  button.disabled = true;
-  setStatus(status, 'Sedang menyimpan soalan...');
+  document.querySelectorAll(".page").forEach(pageElement => {
+    pageElement.classList.remove("active");
+  });
 
-  try {
-    if (!(await isAdmin())) {
-      throw new Error('Akses admin diperlukan.');
-    }
+  target.classList.add("active");
 
-    const { data: userData, error: userError } = await sb.auth.getUser();
+  document.querySelectorAll(".nav-item").forEach(button => {
+    button.classList.toggle("active", button.dataset.page === page);
+  });
 
-    if (userError) throw userError;
-    if (!userData.user) throw new Error('Sesi admin tidak dijumpai.');
+  const names = {
+    home: "Dashboard",
+    books: "Kedai Buku",
+    quiz: "Kuiz Interaktif",
+    exam: "Exam Simulator",
+    classes: "Kelas Online",
+    learning: "Pembelajaran Saya",
+    bank: "Bank Soalan",
+    admin: "Portal Admin"
+  };
 
-    const questionData = {
-      subject: $('maQSubject').value,
-      school_level: $('maQLevel').value,
-      topic: topic,
-      question_type: type,
-      question_text: question,
-      options: options,
-      correct_answer: correctAnswer,
-      expected_answer: expectedAnswer,
-      explanation: $('maQExplanation').value.trim(),
-      marks: marks,
-      difficulty: $('maQDifficulty').value,
-      status: 'draft',
-      created_by: userData.user.id
-    };
+  $("pageTitle").textContent = names[page] || "Math Analyst";
+  $("mainNav").parentElement.classList.remove("open");
 
-  let saveError;
+  if (page === "learning") renderHistory();
+  if (page === "admin") renderAdminQuestions();
+  if (page === "home") renderStats();
 
-if (editingQuestionId) {
-  const { error } = await sb
-    .from('question_bank')
-    .update({
-  ...questionData,
-  status: editingQuestionStatus,
-  updated_at: new Date().toISOString()
-})
-    .eq('id', editingQuestionId);
-
-  saveError = error;
-} else {
-  const { error } = await sb
-    .from('question_bank')
-    .insert(questionData);
-
-  saveError = error;
+  window.scrollTo(0, 0);
 }
 
-if (saveError) throw saveError;
+window.navigate = navigate;
 
-editingQuestionId = null;
-     editingQuestionStatus = 'draft';
-$('maQSave').textContent = 'Simpan Soalan';
+document.querySelectorAll("[data-page]").forEach(button => {
+  button.addEventListener("click", () => navigate(button.dataset.page));
+});
 
-form.reset();
-     $('maQSave').textContent = 'Simpan Soalan';
+document.querySelectorAll("[data-go]").forEach(button => {
+  button.addEventListener("click", () => navigate(button.dataset.go));
+});
 
-await refreshQuestionBank();
+$("mobileMenu").addEventListener("click", () => {
+  $("mainNav").parentElement.classList.toggle("open");
+});
 
-    $('maQObjectiveFields').style.display = 'block';
-    $('maQSubjectiveFields').style.display = 'none';
+function renderBooks() {
+  $("bookGrid").innerHTML = defaultBooks.map((book, index) => `
+    <article class="book-card">
+      <div class="book-cover">
+        <span>
+          ${book.label}<br>
+          <small style="font:500 9px 'DM Sans';letter-spacing:2px">
+            MATH ANALYST
+          </small>
+        </span>
+      </div>
+      <div class="book-info">
+        <h3>${book.title}</h3>
+        <p>${book.desc}</p>
+        <div class="price">${book.price}</div>
+        <button class="btn btn-primary book-enquire" data-book="${index}">
+          Tanya / Beli
+        </button>
+      </div>
+    </article>
+  `).join("");
 
-   setStatus(
-  status,
-  'Berjaya! Soalan telah disimpan atau dikemaskini.'
-);
+  document.querySelectorAll(".book-enquire").forEach(button => {
+    button.addEventListener("click", () => {
+      alert(
+        "Pautan Shopee dan WhatsApp akan dimasukkan selepas maklumat produk diberikan."
+      );
+    });
+  });
+}
+
+// =============================================
+// SEMAK LOGIN DAN KUOTA LATIHAN
+// =============================================
+
+async function checkTrainingQuota(trainingType) {
+  const client = window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+
+  if (!client) {
+    alert("Sambungan sistem tidak tersedia. Sila cuba lagi.");
+    return false;
+  }
+
+  try {
+    // Pelajar mesti menggunakan akaun Google sebenar.
+    if (typeof window.requireStudentLoginMA !== "function") {
+      throw new Error(
+        "Modul log masuk belum tersedia. Muat semula halaman."
+      );
+    }
+
+    const loginReady = await window.requireStudentLoginMA();
+    if (!loginReady) return false;
+
+    const { data: sessionData, error: sessionError } =
+      await client.auth.getSession();
+
+    if (sessionError) throw sessionError;
+
+    const session = sessionData?.session;
+
+    if (!session || session.user?.is_anonymous) {
+      alert("Sila log masuk menggunakan Google dahulu.");
+      return false;
+    }
+
+    const { data, error: quotaError } = await client.rpc(
+      "check_training_quota",
+      { p_training_type: trainingType }
+    );
+
+    if (quotaError) throw quotaError;
+
+    if (!data.allowed) {
+      alert(
+        "Kuota percuma anda telah habis untuk latihan ini.\n\n" +
+        "Langgan pakej Math Analyst 1 bulan atau 3 bulan " +
+        "untuk meneruskan latihan."
+      );
+      return false;
+    }
+
+    return true;
 
   } catch (error) {
-    setStatus(status, 'Gagal menyimpan soalan: ' + error.message, true);
-  } finally {
-    button.disabled = false;
+    console.error("Semakan kuota gagal:", error.message);
+    alert("Tidak dapat menyemak kuota: " + error.message);
+    return false;
   }
 }
-async function refreshQuestionBank() {
-  const output = $('maQuestionList');
-  const status = $('maQuestionListStatus');
 
-  if (!output || !status) return;
+// =============================================
+// MODUL KUIZ INTERAKTIF
+// =============================================
 
-  status.textContent = 'Sedang memuatkan soalan...';
-  output.innerHTML = '';
+function getFiltered(level, subject, topic) {
+  return questions.filter(question =>
+    (!level || question.level === level) &&
+    (!subject || question.subject === subject) &&
+    (!topic || question.topic === topic)
+  );
+}
 
-  try {
-    if (!(await isAdmin())) {
-      throw new Error('Akses admin diperlukan.');
+async function startQuiz() {
+  const quotaAllowed = await checkTrainingQuota("quiz");
+  if (!quotaAllowed) return;
+
+  const level = $("quizLevel").value;
+  const subject = $("quizSubject").value;
+  const topic = $("quizTopic").value;
+
+  let pool = getFiltered(level, subject, topic);
+
+  if (!pool.length) {
+    pool = questions.filter(question =>
+      question.level === level && question.subject === subject
+    );
+  }
+
+  if (!pool.length) {
+    alert(
+      "Belum ada soalan untuk pilihan ini. Admin boleh tambah soalan melalui Portal Admin."
+    );
+    return;
+  }
+
+  quizSet = pool.slice(0, Number($("quizCount").value));
+  quizIndex = 0;
+  quizAnswers = Array(quizSet.length).fill(null);
+  quizStarted = Date.now();
+
+  $("quizSetup").classList.add("hidden");
+  $("quizResult").classList.add("hidden");
+  $("quizStage").classList.remove("hidden");
+
+  clearInterval(quizInterval);
+
+  quizInterval = setInterval(() => {
+    const seconds = Math.floor((Date.now() - quizStarted) / 1000);
+    $("quizTimer").textContent =
+      `${String(Math.floor(seconds / 60)).padStart(2, "0")}:` +
+      `${String(seconds % 60).padStart(2, "0")}`;
+  }, 1000);
+
+  renderQuizQuestion();
+}
+
+function renderQuizQuestion() {
+  const question = quizSet[quizIndex];
+
+  $("quizCounter").textContent =
+    `Soalan ${quizIndex + 1} / ${quizSet.length}`;
+
+  $("quizProgressBar").style.width =
+    `${(quizIndex + 1) / quizSet.length * 100}%`;
+
+  $("questionArea").innerHTML = `
+    <div class="question-meta">
+      ${question.level} · ${question.subject} · ${question.topic}
+    </div>
+    <div class="question-title">${question.q}</div>
+    <div>
+      ${question.options.map((option, index) => `
+        <div
+          class="answer-option ${
+            quizAnswers[quizIndex] === index ? "selected" : ""
+          }"
+          data-answer="${index}">
+          <span class="option-letter">${"ABCD"[index]}</span>
+          ${option}
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  document.querySelectorAll("#questionArea .answer-option").forEach(element => {
+    element.addEventListener("click", () => {
+      quizAnswers[quizIndex] = Number(element.dataset.answer);
+      renderQuizQuestion();
+    });
+  });
+
+  $("nextQuestion").textContent =
+    quizIndex === quizSet.length - 1
+      ? "Hantar jawapan ✓"
+      : "Seterusnya →";
+}
+
+$("startQuiz").addEventListener("click", startQuiz);
+
+$("nextQuestion").addEventListener("click", () => {
+  if (quizAnswers[quizIndex] === null) {
+    alert("Sila pilih satu jawapan dahulu.");
+    return;
+  }
+
+  if (quizIndex < quizSet.length - 1) {
+    quizIndex++;
+    renderQuizQuestion();
+  } else {
+    finishQuiz();
+  }
+});
+
+$("quitQuiz").addEventListener("click", () => {
+  clearInterval(quizInterval);
+  $("quizStage").classList.add("hidden");
+  $("quizSetup").classList.remove("hidden");
+});
+
+function finishQuiz() {
+  clearInterval(quizInterval);
+
+  const correct = quizSet.filter(
+    (question, index) => quizAnswers[index] === question.answer
+  ).length;
+
+  const percentage = Math.round(correct / quizSet.length * 100);
+  const elapsed = Math.round((Date.now() - quizStarted) / 1000);
+
+  const topicStats = {};
+
+  quizSet.forEach((question, index) => {
+    topicStats[question.topic] ??= { correct: 0, total: 0 };
+    topicStats[question.topic].total++;
+
+    if (quizAnswers[index] === question.answer) {
+      topicStats[question.topic].correct++;
     }
+  });
 
-    let query = sb
-      .from('question_bank')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const attempt = {
+    type: "Kuiz",
+    level: $("quizLevel").value,
+    subject: $("quizSubject").value,
+    topic: $("quizTopic").value,
+    score: percentage,
+    correct,
+    total: quizSet.length,
+    elapsed,
+    answers: quizSet.map((question, index) => ({
+      question: question.q,
+      topic: question.topic,
+      selected: quizAnswers[index],
+      correct_answer: question.answer,
+      is_correct: quizAnswers[index] === question.answer
+    }))
+  };
 
-    const filter = $('maQuestionFilter')?.value;
+  history.unshift({
+    type: "Kuiz",
+    date: new Date().toLocaleString("ms-MY"),
+    score: percentage,
+    correct,
+    total: quizSet.length,
+    elapsed
+  });
 
-    if (filter) {
-      query = query.eq('subject', filter);
+  save();
+
+  $("quizStage").classList.add("hidden");
+  $("quizResult").classList.remove("hidden");
+
+  $("quizResult").innerHTML = `
+    <span class="eyebrow">LAPORAN PRESTASI INDIVIDU</span>
+    <h2>Kuiz selesai!</h2>
+    <div class="result-score">${percentage}%</div>
+
+    <div class="result-summary">
+      <div>
+        <b>${correct}/${quizSet.length}</b>
+        <span>Jawapan betul</span>
+      </div>
+      <div>
+        <b>${Math.floor(elapsed / 60)}m ${elapsed % 60}s</b>
+        <span>Masa digunakan</span>
+      </div>
+    </div>
+
+    <h3>Analisis mengikut topik</h3>
+
+    ${Object.entries(topicStats).map(([topic, result]) => `
+      <div class="feedback">
+        <b>${topic}</b> — ${result.correct}/${result.total} betul
+        (${Math.round(result.correct / result.total * 100)}%)
+      </div>
+    `).join("")}
+
+    <div id="cloudSaveStatus" class="feedback">
+      Sedang menyimpan laporan...
+    </div>
+
+    <button class="btn btn-primary" id="retryQuiz">Cuba lagi</button>
+  `;
+
+  $("retryQuiz").addEventListener("click", () => {
+    $("quizResult").classList.add("hidden");
+    $("quizSetup").classList.remove("hidden");
+  });
+
+  saveAttemptToCloud(attempt).then(success => {
+    const status = $("cloudSaveStatus");
+
+    if (status) {
+      status.textContent = success
+        ? "Laporan berjaya disimpan ke akaun anda."
+        : "Laporan gagal disimpan ke awan. Sila semak sambungan.";
     }
+  });
+}
 
-    const { data, error } = await query;
+// =============================================
+// MODUL EXAM SIMULATOR
+// =============================================
 
-    if (error) throw error;
+async function startExam() {
+  const quotaAllowed = await checkTrainingQuota("exam");
+  if (!quotaAllowed) return;
 
-    if (!data || data.length === 0) {
-      status.textContent = 'Belum ada soalan dalam bank soalan.';
+  const level = $("examLevel").value;
+  const subject = $("examSubject").value;
+
+  const pool = questions.filter(question =>
+    question.level === level && question.subject === subject
+  );
+
+  if (!pool.length) {
+    alert(
+      "Belum ada set contoh untuk kombinasi ini. Tambah soalan melalui Portal Admin."
+    );
+    return;
+  }
+
+  examSet = pool.slice(0, Number($("examCount").value));
+  examAnswers = Array(examSet.length).fill(null);
+  examIndex = 0;
+  examMode = $("examMode").value;
+  examSeconds = examMode === "exam" ? 1800 : 0;
+  examStarted = Date.now();
+
+  $("examSetup").classList.add("hidden");
+  $("examResult").classList.add("hidden");
+  $("examStage").classList.remove("hidden");
+
+  clearInterval(examInterval);
+
+  if (examMode === "exam") {
+    examInterval = setInterval(() => {
+      examSeconds--;
+      updateExamTimer();
+
+      if (examSeconds <= 0) finishExam();
+    }, 1000);
+  } else {
+    $("examTimer").textContent = "Tanpa had masa";
+  }
+
+  renderExamQuestion();
+}
+
+function updateExamTimer() {
+  $("examTimer").textContent =
+    `${String(Math.floor(examSeconds / 60)).padStart(2, "0")}:` +
+    `${String(examSeconds % 60).padStart(2, "0")}`;
+}
+
+function renderExamQuestion() {
+  const question = examSet[examIndex];
+
+  $("examCounter").textContent =
+    `Soalan ${examIndex + 1} / ${examSet.length}`;
+
+  $("examProgressBar").style.width =
+    `${(examIndex + 1) / examSet.length * 100}%`;
+
+  $("examQuestion").innerHTML = `
+    <div class="question-meta">
+      KERTAS LATIHAN · ${$("examLevel").value} · ${$("examSubject").value}
+    </div>
+
+    <div class="question-title">${question.q}</div>
+
+    ${question.options.map((option, index) => `
+      <div
+        class="answer-option ${
+          examAnswers[examIndex] === index ? "selected" : ""
+        }"
+        data-answer="${index}">
+        <span class="option-letter">${"ABCD"[index]}</span>
+        ${option}
+      </div>
+    `).join("")}
+  `;
+
+  document.querySelectorAll("#examQuestion .answer-option").forEach(element => {
+    element.addEventListener("click", () => {
+      examAnswers[examIndex] = Number(element.dataset.answer);
+      renderExamQuestion();
+    });
+  });
+
+  $("examPrev").disabled = examIndex === 0;
+
+  $("examNext").textContent =
+    examIndex === examSet.length - 1
+      ? "Hantar kertas ✓"
+      : "Seterusnya →";
+}
+
+$("startExam").addEventListener("click", startExam);
+
+$("examPrev").addEventListener("click", () => {
+  if (examIndex > 0) {
+    examIndex--;
+    renderExamQuestion();
+  }
+});
+
+$("examNext").addEventListener("click", () => {
+  if (examIndex < examSet.length - 1) {
+    examIndex++;
+    renderExamQuestion();
+  } else {
+    finishExam();
+  }
+});
+
+function finishExam() {
+  clearInterval(examInterval);
+
+  const correct = examSet.filter(
+    (question, index) => examAnswers[index] === question.answer
+  ).length;
+
+  const percentage = Math.round(correct / examSet.length * 100);
+  const elapsed = Math.round((Date.now() - examStarted) / 1000);
+
+  const attempt = {
+    type: "Exam Simulator",
+    level: $("examLevel").value,
+    subject: $("examSubject").value,
+    mode: examMode,
+    score: percentage,
+    correct,
+    total: examSet.length,
+    elapsed,
+    answers: examSet.map((question, index) => ({
+      question: question.q,
+      topic: question.topic,
+      selected: examAnswers[index],
+      correct_answer: question.answer,
+      is_correct: examAnswers[index] === question.answer
+    }))
+  };
+
+  history.unshift({
+    type: "Exam Simulator",
+    date: new Date().toLocaleString("ms-MY"),
+    score: percentage,
+    correct,
+    total: examSet.length,
+    elapsed
+  });
+
+  save();
+
+  $("examStage").classList.add("hidden");
+  $("examResult").classList.remove("hidden");
+
+  $("examResult").innerHTML = `
+    <span class="eyebrow">KEPUTUSAN SIMULASI</span>
+    <h2>Peperiksaan selesai</h2>
+    <div class="result-score">${percentage}%</div>
+
+    <div class="result-summary">
+      <div>
+        <b>${correct}/${examSet.length}</b>
+        <span>Jawapan betul</span>
+      </div>
+      <div>
+        <b>${examSet.length - correct}</b>
+        <span>Jawapan salah / kosong</span>
+      </div>
+    </div>
+
+    <h3>Semakan jawapan</h3>
+
+    ${examSet.map((question, index) => `
+      <div class="feedback">
+        <b>Soalan ${index + 1}: ${quizLetter(question.answer)}</b>
+        — ${question.explanation || "Tiada penerangan disediakan."}
+        <br>
+        Jawapan anda:
+        ${examAnswers[index] === null
+          ? "Tidak dijawab"
+          : quizLetter(examAnswers[index])}
+      </div>
+    `).join("")}
+
+    <div id="cloudSaveStatus" class="feedback">
+      Sedang menyimpan laporan...
+    </div>
+
+    <button class="btn btn-primary" id="examAgain">
+      Kembali ke tetapan
+    </button>
+  `;
+
+  $("examAgain").addEventListener("click", () => {
+    $("examResult").classList.add("hidden");
+    $("examSetup").classList.remove("hidden");
+  });
+
+  saveAttemptToCloud(attempt).then(success => {
+    const status = $("cloudSaveStatus");
+
+    if (status) {
+      status.textContent = success
+        ? "Laporan berjaya disimpan ke akaun anda."
+        : "Laporan gagal disimpan ke awan. Sila semak sambungan.";
+    }
+  });
+}
+
+function quizLetter(index) {
+  return "ABCD"[index];
+}
+
+// =============================================
+// ADMIN DEMO - SOALAN TEMPATAN
+// =============================================
+
+$("questionForm").addEventListener("submit", event => {
+  event.preventDefault();
+
+  questions.push({
+    level: $("adminLevel").value,
+    subject: $("adminSubject").value,
+    topic: $("adminTopic").value.trim(),
+    q: $("adminQuestion").value.trim(),
+    options: [
+      $("optA").value,
+      $("optB").value,
+      $("optC").value,
+      $("optD").value
+    ],
+    answer: Number($("adminCorrect").value),
+    explanation: $("adminExplanation").value.trim()
+  });
+
+  save();
+  event.target.reset();
+  renderAdminQuestions();
+  alert("Soalan disimpan dalam browser ini.");
+});
+
+function renderAdminQuestions() {
+  $("adminQuestionList").innerHTML = questions.map((question, index) => `
+    <div class="admin-question">
+      <button data-delete="${index}">Padam</button>
+      <b>${question.level} · ${question.subject}</b>
+      <br>${question.q}
+    </div>
+  `).join("") || '<div class="empty-state">Tiada soalan.</div>';
+
+  document.querySelectorAll("[data-delete]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (confirm("Padam soalan ini?")) {
+        questions.splice(Number(button.dataset.delete), 1);
+        save();
+        renderAdminQuestions();
+      }
+    });
+  });
+}
+
+// =============================================
+// SEJARAH DAN STATISTIK
+// =============================================
+
+function renderHistory() {
+  $("historyList").innerHTML = history.length
+    ? history.map(item => `
+        <div class="history-item">
+          <div>
+            <b>${item.type}</b>
+            <span class="muted">
+              ${item.date} · ${item.correct}/${item.total} betul
+            </span>
+          </div>
+          <div class="history-score">${item.score}%</div>
+        </div>
+      `).join("")
+    : '<div class="empty-state">Belum ada rekod. Selesaikan kuiz untuk melihat laporan di sini.</div>';
+}
+
+function renderStats() {
+  $("statQuizzes").textContent =
+    history.filter(item => item.type === "Kuiz").length;
+
+  $("statExams").textContent =
+    history.filter(item => item.type === "Exam Simulator").length;
+
+  $("statAverage").textContent = history.length
+    ? Math.round(
+        history.reduce((total, item) => total + item.score, 0) /
+        history.length
+      ) + "%"
+    : "—";
+}
+
+$("clearHistory").addEventListener("click", () => {
+  if (confirm("Kosongkan semua rekod latihan demo pada peranti ini?")) {
+    history = [];
+    save();
+    renderHistory();
+    renderStats();
+  }
+});
+
+$("classEnquire").addEventListener("click", () => {
+  alert(
+    "Masukkan nombor WhatsApp dan pautan pendaftaran kelas apabila kandungan sebenar disediakan."
+  );
+});
+
+// =============================================
+// PRATONTON LATIHAN HTML
+// =============================================
+
+(function initHtmlPracticePreview() {
+  const input = document.getElementById("htmlPracticeUpload");
+  const load = document.getElementById("htmlPracticeLoad");
+  const clear = document.getElementById("htmlPracticeClear");
+  const frame = document.getElementById("htmlPracticeFrame");
+  const wrap = document.getElementById("htmlPracticeFrameWrap");
+  const status = document.getElementById("htmlPracticeStatus");
+  const fileName = document.getElementById("htmlPracticeFileName");
+
+  if (!input || !load || !clear || !frame || !wrap || !status) {
+    console.error("Elemen pratonton HTML tidak lengkap.");
+    return;
+  }
+
+  let currentUrl = null;
+
+  const saveButton = document.getElementById("htmlPracticeSave");
+  const titleInput = document.getElementById("htmlPracticeTitle");
+  const levelInput = document.getElementById("htmlPracticeLevel");
+  const subjectInput = document.getElementById("htmlPracticeSubject");
+  const topicInput = document.getElementById("htmlPracticeTopic");
+
+  if (saveButton) {
+    saveButton.addEventListener("click", async () => {
+      const file = input.files && input.files[0];
+
+      if (!file) {
+        status.textContent = "Sila pilih fail HTML dahulu.";
+        return;
+      }
+
+      if (
+        !titleInput.value.trim() ||
+        !levelInput.value ||
+        !subjectInput.value.trim()
+      ) {
+        status.textContent = "Sila lengkapkan tajuk, tahap dan subjek.";
+        return;
+      }
+
+      saveButton.disabled = true;
+      status.textContent = "Sedang memuat naik latihan...";
+
+      try {
+        const record = await uploadHtmlExercise(file, {
+          title: titleInput.value.trim(),
+          school_level: levelInput.value,
+          subject: subjectInput.value.trim(),
+          topic: topicInput.value.trim()
+        });
+
+        status.textContent = "Berjaya! Latihan disimpan sebagai DRAFT.";
+        alert("Latihan berjaya dimuat naik ke Supabase.");
+        console.log("Latihan disimpan:", record);
+
+      } catch (error) {
+        console.error(error);
+        status.textContent = "Upload gagal: " + error.message;
+
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+  }
+
+  load.addEventListener("click", () => {
+    const file = input.files && input.files[0];
+
+    if (!file) {
+      status.textContent = "Sila pilih fail HTML dahulu.";
       return;
     }
 
-    status.textContent = 'Jumlah soalan: ' + data.length;
+    if (!/\.html?$/i.test(file.name) && file.type !== "text/html") {
+      status.textContent = "Fail tidak sah. Pilih fail .html.";
+      return;
+    }
 
-    output.innerHTML = data.map(item => `
-      <div class="ma-exercise" style="padding:15px 0">
-        <div class="ma-access-row" style="justify-content:space-between">
-          <b>${esc(item.subject)} · ${esc(item.school_level)}</b>
-          <b>${esc(item.status.toUpperCase())}</b>
-        </div>
+    if (file.size > 5 * 1024 * 1024) {
+      status.textContent =
+        "Saiz fail melebihi 5 MB. Sila pilih fail lebih kecil.";
+      return;
+    }
 
-        <div class="ma-status">
-          ${esc(item.topic)} ·
-          ${item.question_type === 'objective' ? 'Objektif' : 'Subjektif'}
-          · ${esc(item.difficulty)}
-          · ${Number(item.marks)} markah
-        </div>
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
 
-        <p>${esc(item.question_text)}</p>
+    currentUrl = URL.createObjectURL(file);
+    frame.src = currentUrl;
+    fileName.textContent = file.name;
+    wrap.classList.remove("hidden");
 
-        <div class="ma-access-row">
-          <button type="button" data-q-view="${esc(item.id)}">
-            Lihat
-          </button>
+    status.textContent =
+      "Pratonton dibuka. Fail ini hanya berada pada sesi browser ini.";
+  });
 
-          <button type="button" data-q-edit="${esc(item.id)}">
-            Edit
-          </button>
+  clear.addEventListener("click", () => {
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
 
-          <button type="button" data-q-delete="${esc(item.id)}"
-            style="background:#b42318">
-            Padam
-          </button>
+    currentUrl = null;
+    frame.removeAttribute("src");
+    input.value = "";
+    wrap.classList.add("hidden");
+    status.textContent = "Pratonton dikosongkan.";
+  });
+})();
 
-          <button type="button" data-q-publish="${esc(item.id)}"
-            style="background:${item.status === 'published' ? '#68748a' : '#16865b'}">
-            ${item.status === 'published' ? 'Nyahterbit' : 'Terbitkan'}
-          </button>
-        </div>
-      </div>
-    `).join('');
+// =============================================
+// BANK SOALAN MATH ANALYST
+// =============================================
 
-    output.querySelectorAll('[data-q-view]').forEach(button => {
-      button.addEventListener('click', () => {
-        const item = data.find(x => x.id === button.dataset.qView);
-        if (!item) return;
+let bankQuestions = [];
+let bankAnswers = [];
+let bankIndex = 0;
+let bankStarted = false;
 
-        const options = item.options || {};
-
-        let details =
-          'Subjek: ' + item.subject +
-          '\nTingkatan: ' + item.school_level +
-          '\nTopik: ' + item.topic +
-          '\nJenis: ' + item.question_type +
-          '\n\nSoalan:\n' + item.question_text;
-
-        if (item.question_type === 'objective') {
-          details += '\n\nA. ' + (options.A || '');
-          details += '\nB. ' + (options.B || '');
-          details += '\nC. ' + (options.C || '');
-          details += '\nD. ' + (options.D || '');
-          details += '\n\nJawapan: ' + (item.correct_answer || '');
-        } else {
-          details += '\n\nSkema jawapan:\n' +
-            (item.expected_answer || '');
-        }
-
-        details += '\n\nPenerangan:\n' +
-          (item.explanation || 'Tiada penerangan');
-
-        alert(details);
-      });
-    });
-
-    output.querySelectorAll('[data-q-edit]').forEach(button => {
-      button.addEventListener('click', () => {
-        const item = data.find(x => x.id === button.dataset.qEdit);
-        if (!item) return;
-
-        editingQuestionId = item.id;
-         editingQuestionStatus = item.status;
-
-        $('maQSubject').value = item.subject;
-        $('maQLevel').value = item.school_level;
-        $('maQTopic').value = item.topic;
-        $('maQType').value = item.question_type;
-        $('maQText').value = item.question_text;
-
-        const options = item.options || {};
-
-        $('maQOptionA').value = options.A || '';
-        $('maQOptionB').value = options.B || '';
-        $('maQOptionC').value = options.C || '';
-        $('maQOptionD').value = options.D || '';
-
-        $('maQCorrect').value = item.correct_answer || '';
-        $('maQExpected').value = item.expected_answer || '';
-        $('maQExplanation').value = item.explanation || '';
-        $('maQMarks').value = item.marks || 1;
-        $('maQDifficulty').value = item.difficulty || 'Sederhana';
-
-        $('maQObjectiveFields').style.display =
-          item.question_type === 'objective' ? 'block' : 'none';
-
-        $('maQSubjectiveFields').style.display =
-          item.question_type === 'subjective' ? 'block' : 'none';
-
-        $('maQSave').textContent = 'Simpan Perubahan';
-
-        setStatus(
-          $('maQStatus'),
-          'Sedang mengedit soalan. Tekan Simpan Perubahan selepas selesai.'
-        );
-
-        $('maQuestionForm').scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      });
-    });
-
-    output.querySelectorAll('[data-q-delete]').forEach(button => {
-      button.addEventListener('click', async () => {
-        const item = data.find(x => x.id === button.dataset.qDelete);
-        if (!item) return;
-
-        if (!confirm('Padam soalan ini secara kekal?')) return;
-
-        button.disabled = true;
-
-        try {
-          if (!(await isAdmin())) {
-            throw new Error('Akses admin diperlukan.');
-          }
-
-          const { error } = await sb
-            .from('question_bank')
-            .delete()
-            .eq('id', item.id);
-
-          if (error) throw error;
-
-          await refreshQuestionBank();
-
-        } catch (error) {
-          alert('Gagal memadam soalan: ' + error.message);
-          button.disabled = false;
-        }
-      });
-    });
-
-    output.querySelectorAll('[data-q-publish]').forEach(button => {
-      button.addEventListener('click', async () => {
-        const item = data.find(x => x.id === button.dataset.qPublish);
-        if (!item) return;
-
-        button.disabled = true;
-
-        try {
-          if (!(await isAdmin())) {
-            throw new Error('Akses admin diperlukan.');
-          }
-
-          const newStatus =
-            item.status === 'published' ? 'draft' : 'published';
-
-          const { error } = await sb
-            .from('question_bank')
-            .update({
-              status: newStatus,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', item.id);
-
-          if (error) throw error;
-
-          await refreshQuestionBank();
-
-        } catch (error) {
-          alert('Gagal mengubah status: ' + error.message);
-          button.disabled = false;
-        }
-      });
-    });
-
-  } catch (error) {
-    status.textContent = 'Gagal memuatkan soalan: ' + error.message;
-    status.style.color = '#b42318';
-  }
+function getBankClient() {
+  return window.supabaseClient ||
+    (typeof supabaseClient !== "undefined" ? supabaseClient : null);
 }
-   
-function addMyLearningPanel() {
-  const page = document.getElementById("page-learning");
-  if (!page || document.getElementById("maMyReports")) return;
 
-  const panel = document.createElement("div");
-  panel.id = "maMyReports";
-  panel.className = "panel";
-  panel.style.marginTop = "18px";
+function setBankStatus(message, isError = false) {
+  const status = $("bankStatus");
+  if (!status) return;
 
-  panel.innerHTML = `
-    <div class="section-heading">
-      <div>
-        <span class="eyebrow">SUPABASE CLOUD</span>
-        <h3>Laporan Latihan Saya</h3>
-      </div>
-      <button class="btn btn-ghost btn-small" id="maRefreshMyReports">
-        Muat semula
-      </button>
+  status.textContent = message;
+  status.style.color = isError ? "#b42318" : "#68748a";
+}
+
+async function loadBankQuestions() {
+  const client = getBankClient();
+
+  if (!client) {
+    throw new Error("Sambungan Supabase tidak tersedia.");
+  }
+
+  const level = $("bankLevel").value;
+  const subject = $("bankSubject").value;
+  const topic = $("bankTopic").value;
+
+  if (!level || !subject) {
+    throw new Error("Sila pilih tahap dan subjek dahulu.");
+  }
+
+  setBankStatus("Sedang mengambil soalan...");
+
+  const { data, error } = await client.rpc(
+    "get_student_questions",
+    {
+      p_school_level: level,
+      p_subject: subject,
+      p_topic: null,
+      p_limit: 50
+    }
+  );
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error("Belum ada soalan diterbitkan untuk pilihan ini.");
+  }
+
+  const topicSelect = $("bankTopic");
+  const selectedTopic = topic;
+
+  const topics = [...new Set(data.map(question => question.topic))].sort();
+
+  topicSelect.innerHTML =
+    '<option value="">Semua topik</option>' +
+    topics.map(item => `<option value="${item}">${item}</option>`).join("");
+
+  if (topics.includes(selectedTopic)) {
+    topicSelect.value = selectedTopic;
+  }
+
+  const filtered = topicSelect.value
+    ? data.filter(question => question.topic === topicSelect.value)
+    : data;
+
+  if (filtered.length === 0) {
+    throw new Error("Tiada soalan untuk topik yang dipilih.");
+  }
+
+  bankQuestions = filtered.slice(0, Number($("bankCount").value));
+  bankAnswers = Array(bankQuestions.length).fill(null);
+  bankIndex = 0;
+
+  return bankQuestions;
+}
+
+function renderBankQuestion() {
+  const question = bankQuestions[bankIndex];
+  if (!question) return;
+
+  $("bankQuestionStage").classList.remove("hidden");
+  $("bankResult").classList.add("hidden");
+
+  $("bankCounter").textContent =
+    `Soalan ${bankIndex + 1} / ${bankQuestions.length}`;
+
+  $("bankScore").textContent =
+    `Markah maksimum: ${bankQuestions.reduce(
+      (total, item) => total + Number(item.marks || 1), 0
+    )}`;
+
+  $("bankProgressBar").style.width =
+    `${((bankIndex + 1) / bankQuestions.length) * 100}%`;
+
+  const escapeHTML = value =>
+    String(value ?? "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[character]);
+
+  let content = `
+    <div class="question-meta">
+      ${escapeHTML(question.school_level)} ·
+      ${escapeHTML(question.subject)} ·
+      ${escapeHTML(question.topic)}
     </div>
 
-    <div id="maMySubscription"></div>
-    <div id="maMyQuota"></div>
-    <div id="maMyReportStatus" class="ma-status">
-      Memuatkan laporan...
+    <div class="question-title">
+      ${escapeHTML(question.question_text)}
     </div>
-    <div id="maMyReportRows"></div>
+
+    <p class="muted">
+      ${Number(question.marks || 1)} markah ·
+      ${escapeHTML(question.difficulty || "Sederhana")}
+    </p>
   `;
 
-  page.appendChild(panel);
+  if (question.question_type === "objective") {
+    const options = question.options || {};
 
-  document.getElementById("maRefreshMyReports")
-    ?.addEventListener("click", refreshMyReports);
-}
-
-async function refreshMyReports() {
-  const status = document.getElementById("maMyReportStatus");
-  const output = document.getElementById("maMyReportRows");
-  const subscription = document.getElementById("maMySubscription");
-  const quota = document.getElementById("maMyQuota");
-
-  if (!status || !output) return;
-
-  status.textContent = "Sedang mengambil rekod latihan...";
-  output.innerHTML = "";
-
-  try {
-    const user = await ensureStudentSession();
-
-    const access = await checkAccess();
-    const accessData = Array.isArray(access) ? access[0] : access;
-    const premium = !!accessData?.active;
-
-    subscription.innerHTML = `
-      <div class="ma-access-box">
-        <b>Status akaun:</b>
-        <span style="color:${premium ? "#16865b" : "#b7791f"}">
-          ${premium ? "Langganan aktif" : "Pengguna percuma"}
-        </span>
-        <br>
-        <span class="ma-status">
-          ${premium
-            ? "Tarikh tamat: " +
-              (accessData.expires_at
-                ? new Date(accessData.expires_at).toLocaleDateString("ms-MY")
-                : "—")
-            : "Anda mempunyai 3 percubaan percuma bagi setiap jenis latihan."}
-        </span>
-      </div>
-    `;
-
-    const { data: usage, error: usageError } = await sb
-      .from("free_training_usage")
-      .select("training_type,attempts_used")
-      .eq("user_id", user.id);
-
-    if (usageError) throw usageError;
-
-    const used = { bank: 0, quiz: 0, exam: 0 };
-
-    (usage || []).forEach(item => {
-      if (Object.prototype.hasOwnProperty.call(used, item.training_type)) {
-        used[item.training_type] = Number(item.attempts_used || 0);
-      }
-    });
-
-    quota.innerHTML = `
-      <div class="ma-access-box">
-        <h4>Penggunaan kuota latihan</h4>
-        ${[
-          ["bank", "Bank Soalan"],
-          ["quiz", "Kuiz Interaktif"],
-          ["exam", "Exam Simulator"]
-        ].map(([key, label]) => `
-          <div class="ma-exercise">
-            <b>${label}</b>
-            <div class="ma-status">
-              ${premium
-                ? "Tanpa had — langganan aktif"
-                : `${used[key]} / 3 percubaan digunakan · ${Math.max(0, 3 - used[key])} berbaki`}
-            </div>
+    content += `
+      <div class="bank-options">
+        ${["A", "B", "C", "D"].map(letter => `
+          <div
+            class="answer-option ${
+              bankAnswers[bankIndex] === letter ? "selected" : ""
+            }"
+            data-bank-answer="${letter}">
+            <span class="option-letter">${letter}</span>
+            ${escapeHTML(options[letter] || "")}
           </div>
         `).join("")}
       </div>
     `;
-
-    const [exerciseResult, bankResult] = await Promise.all([
-      sb.from("exercise_attempts")
-        .select("score,max_score,answers,submitted_at")
-        .eq("student_id", user.id)
-        .order("submitted_at", { ascending: false })
-        .limit(200),
-
-      sb.from("question_bank_attempts")
-        .select("subject,school_level,topic,score,max_score,correct_answers,total_questions,submitted_at")
-        .eq("student_id", user.id)
-        .order("submitted_at", { ascending: false })
-        .limit(200)
-    ]);
-
-    if (exerciseResult.error) throw exerciseResult.error;
-    if (bankResult.error) throw bankResult.error;
-
-    const records = [
-      ...(exerciseResult.data || []).map(item => ({
-        type: item.answers?.type || "Latihan",
-        subject: item.answers?.subject || "—",
-        score: Number(item.score || 0),
-        max: Number(item.max_score || 0),
-        date: item.submitted_at
-      })),
-
-      ...(bankResult.data || []).map(item => ({
-        type: "Bank Soalan",
-        subject: item.subject || "—",
-        score: Number(item.score || 0),
-        max: Number(item.max_score || 0),
-        date: item.submitted_at
-      }))
-    ].sort((a, b) =>
-      new Date(b.date || 0) - new Date(a.date || 0)
-    );
-
-    if (!records.length) {
-      status.textContent = "Belum ada rekod latihan dalam talian.";
-      return;
-    }
-
-    status.textContent = `Jumlah rekod latihan: ${records.length}`;
-
-    output.innerHTML = `
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:10px">Jenis latihan</th>
-              <th style="text-align:left;padding:10px">Subjek</th>
-              <th style="text-align:center;padding:10px">Markah</th>
-              <th style="text-align:left;padding:10px">Tarikh</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${records.map(item => {
-              const percentage = item.max > 0
-                ? Math.round(item.score / item.max * 100)
-                : 0;
-
-              return `
-                <tr>
-                  <td style="padding:10px;border-top:1px solid #e8ecf2">
-                    ${esc(item.type)}
-                  </td>
-                  <td style="padding:10px;border-top:1px solid #e8ecf2">
-                    ${esc(item.subject)}
-                  </td>
-                  <td style="padding:10px;text-align:center;border-top:1px solid #e8ecf2">
-                    <b>${percentage}%</b>
-                  </td>
-                  <td style="padding:10px;border-top:1px solid #e8ecf2">
-                    ${item.date
-                      ? esc(new Date(item.date).toLocaleString("ms-MY"))
-                      : "—"}
-                  </td>
-                </tr>
-              `;
-            }).join("")}
-          </tbody>
-        </table>
-      </div>
+  } else {
+    content += `
+      <label><b>Jawapan anda:</b></label>
+      <textarea
+        id="bankSubjectiveAnswer"
+        rows="4"
+        style="width:100%;padding:12px;margin-top:8px"
+        placeholder="Taip jawapan anda di sini..."
+      >${escapeHTML(bankAnswers[bankIndex] || "")}</textarea>
     `;
-
-  } catch (error) {
-    status.textContent = "Gagal memuatkan laporan: " + error.message;
-    status.style.color = "#b42318";
   }
+
+  $("bankQuestionArea").innerHTML = content;
+
+  document.querySelectorAll("[data-bank-answer]").forEach(option => {
+    option.addEventListener("click", () => {
+      bankAnswers[bankIndex] = option.dataset.bankAnswer;
+      renderBankQuestion();
+    });
+  });
+
+  const subjectiveInput = $("bankSubjectiveAnswer");
+
+  if (subjectiveInput) {
+    subjectiveInput.addEventListener("input", () => {
+      bankAnswers[bankIndex] = subjectiveInput.value;
+    });
+  }
+
+  $("bankNext").textContent =
+    bankIndex === bankQuestions.length - 1
+      ? "Hantar Jawapan"
+      : "Seterusnya";
 }
 
-async function refreshStudent() {
-    const sub = $('maSubStatus');
-    const list = $('maExerciseList');
-
-    try {
-      const access = await checkAccess();
-      const result = Array.isArray(access) ? access[0] : access;
-      const active = !!result?.active;
-       const redeemRow = $('maRedeem')?.closest('.ma-access-row');
-const redeemStatus = $('maRedeemStatus');
-
-if (redeemRow) {
-  redeemRow.style.display = 'flex';
-}
-
-if (redeemStatus) {
-  redeemStatus.style.display = 'block';
-}
-      const expiry = result?.expires_at;
-
-      if (sub) {
-        sub.innerHTML = active
-          ? `<b style="color:#16865b">Akses premium aktif</b><br>Tamat: ${expiry ? new Date(expiry).toLocaleString('ms-MY') : '—'}`
-          : '<b>Akses premium belum aktif / telah tamat.</b> Kuiz percuma dan kedai buku masih boleh digunakan.';
-      }
-
-      if (!active) {
-        if (list) list.innerHTML = '<p class="ma-status">Latihan premium dikunci. Aktifkan kod 30 atau 90 hari untuk meneruskan.</p>';
-        return;
-      }
-
-      const { data: rows, error } = await sb
-        .from('html_exercises')
-        .select('id,title,description,school_level,subject,topic,storage_path')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (!rows?.length) {
-        if (list) list.innerHTML = '<p class="ma-status">Belum ada latihan diterbitkan.</p>';
-        return;
-      }
-
-      list.innerHTML = rows.map((item) => `
-        <div class="ma-exercise">
-          <b>${esc(item.title)}</b>
-          <div class="ma-status">${esc(item.school_level)} · ${esc(item.subject)} · ${esc(item.topic || '')}</div>
-          <button type="button" data-open-exercise="${esc(item.id)}">Buka latihan</button>
-        </div>`).join('');
-
-      list.querySelectorAll('[data-open-exercise]').forEach((button) => {
-        button.addEventListener('click', async () => {
-          const row = rows.find((item) => item.id === button.dataset.openExercise);
-          if (!row) return;
-          button.disabled = true;
-          try {
-            const { data, error: signedError } = await sb.storage
-              .from(BUCKET)
-              .createSignedUrl(row.storage_path, 300);
-            if (signedError) throw signedError;
-            window.open(data.signedUrl, '_blank', 'noopener');
-          } catch (error) {
-            alert('Tidak dapat membuka latihan: ' + error.message);
-          } finally {
-            button.disabled = false;
-          }
-        });
-      });
-    } catch (error) {
-      setStatus(sub, 'Ralat akses: ' + error.message, true);
-      setStatus(list, 'Tidak dapat memuatkan latihan.', true);
-    }
-  }
-
- 
-
-
-     
-
-  async function redeem() {
-    const input = $('maAccessCode');
-    const output = $('maRedeemStatus');
-    const button = $('maRedeem');
-    const code = input?.value.trim().toUpperCase();
-
-    if (!code) {
-      setStatus(output, 'Masukkan kod akses dahulu.', true);
-      return;
-    }
-
-    button.disabled = true;
-    setStatus(output, 'Sedang mengaktifkan kod...');
-    try {
-      await ensureStudentSession();
-      const { error } = await sb.rpc('activate_access_code', { p_code: code });
-      if (error) throw error;
-      setStatus(output, 'Kod berjaya diaktifkan!');
-      input.value = '';
-      await refreshStudent();
-    } catch (error) {
-      setStatus(output, 'Pengaktifan gagal: ' + error.message, true);
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  function randomCode() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = new Uint8Array(10);
-    crypto.getRandomValues(bytes);
-    const raw = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
-    return raw.match(/.{1,5}/g).join('-');
-  }
-
-  async function adminLogin() {
-    const output = $('maAdminLoginStatus');
-    const button = $('maAdminSignIn');
-    button.disabled = true;
-    setStatus(output, 'Sedang log masuk...');
-
-    try {
-      const { error } = await sb.auth.signInWithPassword({
-        email: $('maAdminEmail').value.trim(),
-        password: $('maAdminPassword').value
-      });
-      if (error) throw error;
-
-      if (!(await isAdmin())) {
-        await sb.auth.signOut();
-        throw new Error('Akaun ini belum diberikan role admin.');
-      }
-
-      $('maAdminLogin').classList.add('hidden');
-      $('maAdminTools').classList.remove('hidden');
-      $('maAdminWho').textContent = 'Admin: ' + $('maAdminEmail').value.trim();
-      showAdminUpload(true);
-      await refreshAdminExercises();
-       await refreshQuestionBank();
-    } catch (error) {
-      setStatus(output, 'Login gagal: ' + error.message, true);
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  async function createCode() {
-    const output = $('maGeneratedCode');
-    const duration = Number($('maCodeDuration').value);
-    const code = randomCode();
-
-    try {
-      if (!(await isAdmin())) throw new Error('Akses admin diperlukan.');
-      const { error } = await sb.rpc('create_access_code', {
-        p_code: code,
-        p_duration_days: duration
-      });
-      if (error) throw error;
-
-      output.innerHTML = `
-        <p>Kod akses ${duration} hari:</p>
-        <div class="ma-code">${esc(code)}</div>
-        <div class="ma-access-row"><button id="maCopyCode" type="button">Salin kod</button></div>`;
-      $('maCopyCode').addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(code);
-          $('maCopyCode').textContent = 'Disalin';
-        } catch {
-          setStatus(output, 'Salinan automatik tidak tersedia. Sila pilih dan salin kod di atas.');
-        }
-      });
-    } catch (error) {
-      output.textContent = 'Gagal jana kod: ' + error.message;
-    }
-  }
-
-  async function refreshAdminExercises() {
-    const output = $('maAdminExercises');
-    if (!output) return;
-    output.textContent = 'Memuatkan...';
-
-    try {
-      if (!(await isAdmin())) throw new Error('Akses admin diperlukan.');
-      const { data, error } = await sb
-        .from('html_exercises')
-        .select('id,title,school_level,subject,topic,status,created_at')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      output.innerHTML = (data || []).map((item) => `
-        <div class="ma-exercise">
-          <b>${esc(item.title)}</b>
-          <div class="ma-status">${esc(item.school_level)} · ${esc(item.subject)} · ${esc(item.status.toUpperCase())}</div>
-          ${item.status === 'draft' ? `<button type="button" data-publish="${esc(item.id)}">Terbitkan</button>` : ''}
-        </div>`).join('') || '<p class="ma-status">Tiada latihan.</p>';
-
-      output.querySelectorAll('[data-publish]').forEach((button) => {
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          try {
-            if (!(await isAdmin())) throw new Error('Akses admin diperlukan.');
-            const { error: updateError } = await sb
-              .from('html_exercises')
-              .update({ status: 'published' })
-              .eq('id', button.dataset.publish);
-            if (updateError) throw updateError;
-            await refreshAdminExercises();
-             await refreshQuestionBank();
-          } catch (error) {
-            alert('Gagal terbitkan: ' + error.message);
-            button.disabled = false;
-          }
-        });
-      });
-    } catch (error) {
-      setStatus(output, 'Ralat: ' + error.message, true);
-    }
-  }
-async function refreshAdminReports() {
-  const status = $('maReportStatus');
-  const summary = $('maReportSummary');
-  const rows = $('maReportRows');
-
-  if (!status || !summary || !rows) return;
-
-  status.textContent = 'Sedang memuatkan laporan...';
-  summary.innerHTML = '';
-  rows.innerHTML = '';
+async function startBank() {
+  const button = $("bankStart");
+  button.disabled = true;
 
   try {
-    if (!(await isAdmin())) {
-      throw new Error('Akses admin diperlukan.');
+    const quotaAllowed = await checkTrainingQuota("bank");
+    if (!quotaAllowed) return;
+
+    await loadBankQuestions();
+
+    bankStarted = true;
+
+    $("bankQuestionStage").classList.remove("hidden");
+    $("bankResult").classList.add("hidden");
+
+    setBankStatus(`Berjaya memuatkan ${bankQuestions.length} soalan.`);
+    renderBankQuestion();
+
+  } catch (error) {
+    setBankStatus(error.message, true);
+    $("bankQuestionStage").classList.add("hidden");
+
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleBankNext() {
+  const answer = bankAnswers[bankIndex];
+
+  if (
+    answer === null ||
+    answer === undefined ||
+    String(answer).trim() === ""
+  ) {
+    alert("Sila jawab soalan ini dahulu.");
+    return;
+  }
+
+  if (bankIndex < bankQuestions.length - 1) {
+    bankIndex++;
+    renderBankQuestion();
+  } else {
+    await submitBankAnswers();
+  }
+}
+
+function handleBankQuit() {
+  if (!confirm("Anda pasti mahu keluar daripada latihan ini?")) return;
+
+  bankStarted = false;
+  bankQuestions = [];
+  bankAnswers = [];
+  bankIndex = 0;
+
+  $("bankQuestionStage").classList.add("hidden");
+  $("bankResult").classList.add("hidden");
+
+  setBankStatus("Latihan telah dihentikan.");
+}
+
+// Fungsi ini dipanggil oleh access.js selepas halaman Bank Soalan diwujudkan.
+window.MABank = {
+  start: startBank,
+  next: handleBankNext,
+  quit: handleBankQuit,
+  refreshTopics: refreshBankTopics
+};
+
+async function refreshBankTopics() {
+  const level = $("bankLevel").value;
+  const subject = $("bankSubject").value;
+  const topicSelect = $("bankTopic");
+
+  topicSelect.innerHTML = '<option value="">Semua topik</option>';
+
+  if (!level || !subject) return;
+
+  setBankStatus("Menyemak log masuk Google...");
+
+  try {
+    if (typeof window.requireStudentLoginMA !== "function") {
+      throw new Error(
+        "Modul log masuk belum tersedia. Muat semula halaman."
+      );
     }
 
-    const { data: attempts, error } = await sb
-      .from('exercise_attempts')
-      .select('student_id,score,max_score,answers,submitted_at')
-      .order('submitted_at', { ascending: false })
-      .limit(500);
+    const loginReady = await window.requireStudentLoginMA();
+
+    if (!loginReady) {
+      setBankStatus(
+        "Log masuk Google diperlukan untuk memuatkan topik."
+      );
+      return;
+    }
+
+    setBankStatus("Sedang memuatkan senarai topik...");
+
+    const client = getBankClient();
+
+    const { data, error } = await client.rpc(
+      "get_student_questions",
+      {
+        p_school_level: level,
+        p_subject: subject,
+        p_topic: null,
+        p_limit: 50
+      }
+    );
 
     if (error) throw error;
 
-    if (!attempts || attempts.length === 0) {
-      status.textContent = 'Belum ada rekod latihan dalam talian.';
-      return;
-    }
+    const topics = [
+      ...new Set((data || []).map(question => question.topic).filter(Boolean))
+    ].sort();
 
-    const studentIds = [...new Set(
-      attempts.map(x => x.student_id).filter(Boolean)
-    )];
+    topicSelect.innerHTML =
+      '<option value="">Semua topik</option>' +
+      topics.map(topic =>
+        `<option value="${topic}">${topic}</option>`
+      ).join("");
 
-    const { data: profiles, error: profileError } = await sb
-      .from('profiles')
-      .select('id,full_name')
-      .in('id', studentIds);
-
-    if (profileError) throw profileError;
-
-    const names = {};
-    (profiles || []).forEach(profile => {
-      names[profile.id] = profile.full_name || '';
-    });
-
-    const studentCount = studentIds.length;
-    const totalAttempts = attempts.length;
-
-    const percentages = attempts.map(item => {
-      const score = Number(item.score || 0);
-      const max = Number(item.max_score || 0);
-      return max > 0 ? (score / max) * 100 : 0;
-    });
-
-    const average = Math.round(
-      percentages.reduce((total, value) => total + value, 0) /
-      percentages.length
+    setBankStatus(
+      topics.length
+        ? `${topics.length} topik tersedia.`
+        : "Belum ada topik diterbitkan untuk pilihan ini."
     );
 
-    status.textContent = 'Laporan berjaya dimuatkan.';
-
-    summary.innerHTML = `
-      <div class="ma-admin-grid" style="margin-top:14px">
-        <div class="ma-access-box">
-          <div class="ma-status">Jumlah pelajar</div>
-          <h2>${studentCount}</h2>
-        </div>
-        <div class="ma-access-box">
-          <div class="ma-status">Jumlah percubaan</div>
-          <h2>${totalAttempts}</h2>
-        </div>
-        <div class="ma-access-box">
-          <div class="ma-status">Purata pencapaian</div>
-          <h2>${average}%</h2>
-        </div>
-      </div>
-    `;
-
-    rows.innerHTML = `
-      <h3 style="margin-top:22px">Sejarah latihan terkini</h3>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Pelajar</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Latihan</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Subjek</th>
-              <th style="text-align:center;padding:10px;border-bottom:1px solid #e8ecf2">Markah</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e8ecf2">Tarikh</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${attempts.map(item => {
-              const answer = item.answers || {};
-              const score = Number(item.score || 0);
-              const max = Number(item.max_score || 0);
-              const pct = max > 0
-                ? Math.round(score / max * 100)
-                : 0;
-
-              const studentName = names[item.student_id] ||
-                ('Pelajar ' + String(item.student_id || '').slice(0, 8));
-
-              const date = item.submitted_at
-                ? new Date(item.submitted_at).toLocaleString('ms-MY')
-                : '—';
-
-              return `
-                <tr>
-                  <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(studentName)}</td>
-                  <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(answer.type || 'Latihan')}</td>
-                  <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(answer.subject || '—')}</td>
-                  <td style="padding:10px;text-align:center;border-bottom:1px solid #e8ecf2"><b>${pct}%</b></td>
-                  <td style="padding:10px;border-bottom:1px solid #e8ecf2">${esc(date)}</td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
-
   } catch (error) {
-    status.textContent = 'Gagal memuatkan laporan: ' + error.message;
-    status.style.color = '#b42318';
+    setBankStatus(error.message, true);
   }
 }
 
-async function init() {
- 
+async function submitBankAnswers() {
+  const client = getBankClient();
+  const button = $("bankNext");
 
-   
+  button.disabled = true;
+  button.textContent = "Sedang menyemak...";
 
-    
+  try {
+    const answers = bankQuestions.map((question, index) => ({
+      question_id: question.id,
+      answer: String(bankAnswers[index]).trim()
+    }));
 
-     
-
-    
-          
-       
-              
-                
-     if (!sb) {
-      console.error('Supabase client tidak dijumpai. Semak susunan script.');
-      return;
-    }
-
-   addNavAndPages();
-injectAdmin();
-addMyLearningPanel();
-
-    // Admin upload controls are hidden until Supabase confirms the admin role.
-    showAdminUpload(false);
-
-    $('maRedeem')?.addEventListener('click', redeem);
-    $('maAccessCode')?.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') redeem();
-    });
-    $('maAdminSignIn')?.addEventListener('click', adminLogin);
-    $('maCreateCode')?.addEventListener('click', createCode);
-    $('maRefreshExercises')?.addEventListener('click', refreshAdminExercises);
-     $('maRefreshReports')?.addEventListener('click', refreshAdminReports);
-   // Pengurusan Bank Soalan
-$('maRefreshQuestions')?.addEventListener(
-  'click',
-  refreshQuestionBank
-);
-
-$('maQuestionFilter')?.addEventListener(
-  'change',
-  refreshQuestionBank
-);
-   // Bank Soalan
-$('maQuestionForm')?.addEventListener('submit', saveQuestion);
-
-$('maQType')?.addEventListener('change', () => {
-  const type = $('maQType').value;
-
-  $('maQObjectiveFields').style.display =
-    type === 'objective' ? 'block' : 'none';
-
-  $('maQSubjectiveFields').style.display =
-    type === 'subjective' ? 'block' : 'none';
-});
-
-    $('maAdminSignOut')?.addEventListener('click', async () => {
-      await sb.auth.signOut();
-      $('maAdminTools')?.classList.add('hidden');
-      $('maAdminLogin')?.classList.remove('hidden');
-      showAdminUpload(false);
-      // Restore anonymous student session for premium-code activation.
-      try {
-        await ensureStudentSession();
-await refreshStudent();
-await refreshMyReports();
-      } catch (error) {
-        console.warn('Tidak dapat memulihkan sesi pelajar:', error.message);
+    const { data, error } = await client.rpc(
+      "submit_question_bank_attempt",
+      {
+        p_school_level: $("bankLevel").value,
+        p_subject: $("bankSubject").value,
+        p_topic: $("bankTopic").value || null,
+        p_answers: answers
       }
+    );
+
+    if (error) throw error;
+
+    $("bankQuestionStage").classList.add("hidden");
+    $("bankResult").classList.remove("hidden");
+
+    const result = Array.isArray(data) ? data[0] : data;
+
+    $("bankResult").innerHTML = `
+      <div class="result-score">
+        ${Number(result.percentage || 0)}%
+      </div>
+
+      <h2>Latihan selesai!</h2>
+
+      <p>
+        Jawapan betul:
+        <b>${result.correct_answers} / ${result.total_questions}</b>
+      </p>
+
+      <p>
+        Markah:
+        <b>${result.score} / ${result.max_score}</b>
+      </p>
+
+      <p>Keputusan berjaya disimpan.</p>
+
+      <button class="btn btn-primary" id="bankTryAgain">
+        Cuba latihan lagi
+      </button>
+    `;
+
+    $("bankTryAgain").addEventListener("click", () => {
+      $("bankResult").classList.add("hidden");
+      $("bankQuestionStage").classList.add("hidden");
+      setBankStatus("Pilih tetapan untuk memulakan latihan baharu.");
     });
 
-    const adminNav = document.querySelector('[data-page="admin"]');
-    if (adminNav) {
-      const label = adminNav.querySelector('span');
-      if (label) label.textContent = 'Portal Admin';
-    }
+    setBankStatus("Jawapan berjaya dihantar dan disimpan.");
 
-    const oldNavigate = window.navigate;
-    window.navigateMA = (page) => {
-      if (page === 'practice') {
-        document.querySelectorAll('.page').forEach((item) => item.classList.remove('active'));
-        $('page-practice')?.classList.add('active');
-         // Tutup sidebar selepas memilih menu pada telefon
-     $('mainNav')?.parentElement.classList.remove('open');
-        document.querySelectorAll('.nav-item').forEach((button) => {
-          button.classList.toggle('active', button.dataset.page === 'practice');
-        });
-        if ($('pageTitle')) $('pageTitle').textContent = 'Latihan Premium';
-        refreshStudent();
-        window.scrollTo(0, 0);
-      } else if (typeof oldNavigate === 'function') {
-        oldNavigate(page);
-      }
-    };
+  } catch (error) {
+    alert("Gagal menghantar jawapan: " + error.message);
+    setBankStatus("Gagal menyimpan keputusan.", true);
 
-    // Existing app.js does not know about the dynamically added premium nav.
-    document.querySelectorAll('[data-page="practice"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        window.navigateMA('practice');
-      });
-    });
-
-    try {
-      await ensureStudentSession();
-      await refreshStudent();
-
-      if (await isAdmin()) {
-        $('maAdminLogin')?.classList.add('hidden');
-        $('maAdminTools')?.classList.remove('hidden');
-        if ($('maAdminWho')) $('maAdminWho').textContent = 'Admin aktif';
-        showAdminUpload(true);
-        await refreshAdminExercises();
-         await refreshQuestionBank();
-      }
-    } catch (error) {
-      console.warn('Sesi atau akses belum tersedia:', error.message);
-    }
-
-    // Hide legacy demo admin panels; keep them untouched in the source HTML.
-    if ($('page-admin')) {
-      $('page-admin').querySelectorAll('.admin-grid, .panel:not(.html-upload-panel)').forEach((element) => {
-        if (!element.closest('#maAdminPanel')) element.classList.add('hidden');
-      });
-    }
+  } finally {
+    button.disabled = false;
+    button.textContent = "Seterusnya";
   }
+}
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+// Mula aplikasi selepas fungsi dan data disediakan.
+initSelects();
+renderBooks();
+renderStats();
