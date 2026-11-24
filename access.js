@@ -58,11 +58,23 @@
   }
 
   async function getUser() {
-    if (!sb) throw new Error('Supabase client tiada. Semak supabase-config.js.');
-    const { data, error } = await sb.auth.getUser();
-    if (error) throw error;
-    return data?.user || null;
+  if (!sb) throw new Error('Supabase client tiada. Semak supabase-config.js.');
+
+  const { data, error } = await sb.auth.getUser();
+
+  if (error) {
+    if (
+      error.name === 'AuthSessionMissingError' ||
+      error.message === 'Auth session missing!'
+    ) {
+      return null;
+    }
+
+    throw error;
   }
+
+  return data?.user || null;
+}
 
   async function isAdmin() {
     const user = await getUser();
