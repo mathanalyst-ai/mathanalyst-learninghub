@@ -125,9 +125,10 @@
     s.id = 'maVisualEditorStyles';
 
     s.textContent = `
-      #mainNav [data-page="admin"]:not(#maAdminNav) {
-        display:none!important;
-      }
+     /* Sembunyikan menu Admin Demo lama */
+#mainNav [data-page="admin"]:not(#maAdminNav) {
+  display: none !important;
+}
 
       body:not(.ma-admin-authenticated) #page-admin {
         display:none!important;
