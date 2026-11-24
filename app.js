@@ -25,8 +25,22 @@ async function uploadHtmlExercise(file, metadata) {
 
   const { data: userData, error: userError } = await client.auth.getUser();
 
-  if (userError || !userData.user) {
-    throw new Error("Sila log masuk sebagai admin dahulu.");
+  if (userError) throw userError;
+  if (!userData.user || userData.user.is_anonymous) {
+    throw new Error("Sila log masuk menggunakan akaun Admin.");
+  }
+
+  // Semak role Admin sebelum membenarkan upload dari browser.
+  // Polisi RLS dan Storage di Supabase kekal sebagai lapisan keselamatan utama.
+  const { data: adminProfile, error: profileError } = await client
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  if (adminProfile?.role !== "admin") {
+    throw new Error("Akses ditolak. Upload latihan hanya dibenarkan untuk Admin.");
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
