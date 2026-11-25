@@ -1075,7 +1075,7 @@ $("classEnquire").addEventListener("click", () => {
   alert("Butang upload telah ditekan.");
 
   const file = input.files && input.files[0];
-
+  alert("jumlah fail dikesan: " + (input.files ? input.files.length : "input tiada"));
       if (!file) {
         status.textContent = "Sila pilih fail HTML dahulu.";
         return;
