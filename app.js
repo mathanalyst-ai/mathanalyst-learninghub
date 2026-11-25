@@ -950,32 +950,39 @@ function quizLetter(index) {
 // ADMIN DEMO - SOALAN TEMPATAN
 // =============================================
 
-$("questionForm").addEventListener("submit", event => {
-  event.preventDefault();
+const questionForm = $("questionForm");
 
-  questions.push({
-    level: $("adminLevel").value,
-    subject: $("adminSubject").value,
-    topic: $("adminTopic").value.trim(),
-    q: $("adminQuestion").value.trim(),
-    options: [
-      $("optA").value,
-      $("optB").value,
-      $("optC").value,
-      $("optD").value
-    ],
-    answer: Number($("adminCorrect").value),
-    explanation: $("adminExplanation").value.trim()
+if (questionForm) {
+  questionForm.addEventListener("submit", event => {
+    event.preventDefault();
+
+    questions.push({
+      level: $("adminLevel").value,
+      subject: $("adminSubject").value,
+      topic: $("adminTopic").value.trim(),
+      q: $("adminQuestion").value.trim(),
+      options: [
+        $("optA").value,
+        $("optB").value,
+        $("optC").value,
+        $("optD").value
+      ],
+      answer: Number($("adminCorrect").value),
+      explanation: $("adminExplanation").value.trim()
+    });
+
+    save();
+    event.target.reset();
+    renderAdminQuestions();
+    alert("Soalan disimpan dalam browser ini.");
   });
-
-  save();
-  event.target.reset();
-  renderAdminQuestions();
-  alert("Soalan disimpan dalam browser ini.");
-});
+}
 
 function renderAdminQuestions() {
-  $("adminQuestionList").innerHTML = questions.map((question, index) => `
+  const list = $("adminQuestionList");
+  if (!list) return;
+
+  list.innerHTML = questions.map((question, index) => `
     <div class="admin-question">
       <button data-delete="${index}">Padam</button>
       <b>${question.level} · ${question.subject}</b>
