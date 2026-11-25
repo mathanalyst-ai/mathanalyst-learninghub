@@ -1072,7 +1072,9 @@ $("classEnquire").addEventListener("click", () => {
 
   if (saveButton) {
     saveButton.addEventListener("click", async () => {
-      const file = input.files && input.files[0];
+  alert("Butang upload telah ditekan.");
+
+  const file = input.files && input.files[0];
 
       if (!file) {
         status.textContent = "Sila pilih fail HTML dahulu.";
