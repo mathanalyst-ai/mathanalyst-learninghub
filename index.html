@@ -321,6 +321,119 @@
 
       <section id="page-admin" class="page">
        <div id="maAdminTools"></div>
+
+        
+<div class="panel">
+  <span class="eyebrow">PENGURUSAN KANDUNGAN</span>
+  <h3>Pengurusan Kuiz Interaktif</h3>
+  <p class="muted small">
+    Tambah, kemaskini dan padam soalan kuiz.
+  </p>
+
+  <form id="questionForm">
+    <div class="form-grid">
+
+      <label>
+        Tahap pembelajaran
+        <select id="adminLevel" required></select>
+      </label>
+
+      <label>
+        Subjek
+        <select id="adminSubject" required></select>
+      </label>
+
+      <label>
+        Topik
+        <input
+          id="adminTopic"
+          type="text"
+          placeholder="Contoh: Algebra"
+          required
+        >
+      </label>
+
+    </div>
+
+    <label>
+      Soalan
+      <textarea
+        id="adminQuestion"
+        rows="3"
+        placeholder="Masukkan soalan..."
+        required
+      ></textarea>
+    </label>
+
+    <div class="form-grid">
+      <label>
+        Pilihan A
+        <input id="optA" type="text" required>
+      </label>
+
+      <label>
+        Pilihan B
+        <input id="optB" type="text" required>
+      </label>
+
+      <label>
+        Pilihan C
+        <input id="optC" type="text" required>
+      </label>
+
+      <label>
+        Pilihan D
+        <input id="optD" type="text" required>
+      </label>
+    </div>
+
+    <label>
+      Jawapan betul
+      <select id="adminCorrect" required>
+        <option value="0">A</option>
+        <option value="1">B</option>
+        <option value="2">C</option>
+        <option value="3">D</option>
+      </select>
+    </label>
+
+    <label>
+      Penerangan jawapan
+      <textarea
+        id="adminExplanation"
+        rows="3"
+        placeholder="Terangkan kaedah penyelesaian..."
+      ></textarea>
+    </label>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:15px">
+      <button type="submit" class="btn btn-primary">
+        Simpan Soalan
+      </button>
+
+      <button
+        type="button"
+        id="cancelQuestionEdit"
+        class="btn btn-ghost hidden"
+      >
+        Batal Edit
+      </button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">BANK KUIZ TEMPATAN</span>
+      <h3>Senarai Soalan</h3>
+    </div>
+    <span class="tag" id="adminQuestionCount">Soalan: 0</span>
+  </div>
+
+  <div id="adminQuestionList" class="admin-question-list"></div>
+</div>
+
          
 
         <div class="panel html-upload-panel">
