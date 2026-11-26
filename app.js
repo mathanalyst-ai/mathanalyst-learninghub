@@ -1061,6 +1061,8 @@ if (questionForm) {
 function renderAdminQuestions() {
   const list = $("adminQuestionList");
   if (!list) return;
+  const count = $("adminQuestionCount");
+if (count) count.textContent = `Soalan: ${questions.length}`;
 
   list.innerHTML = questions.map((question, index) => `
     <div class="admin-question">
