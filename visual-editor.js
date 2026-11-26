@@ -53,7 +53,10 @@
             price: b.price || '',
             url: b.url || '',
             image_url: b.image_url || '',
-            visible: b.visible !== false
+          status: (b.status === 'draft' || b.visible === false)
+  ? 'draft'
+  : 'published',
+visible: b.status !== 'draft' && b.visible !== false
           }))
         : clone(defaults.books),
 
@@ -719,12 +722,17 @@
           </label>
         </div>
 
-        <label class="ma-ve-field">
-          <span>
-            <input type="checkbox" data-bf="visible" data-i="${i}" ${b.visible?'checked':''}>
-            Paparkan buku ini di Kedai Buku
-          </span>
-        </label>
+       <div class="ma-ve-field">
+  <label>Status buku</label>
+  <select data-bf="status" data-i="${i}">
+    <option value="published" ${b.status !== 'draft' ? 'selected' : ''}>
+      Published - Paparkan di Kedai Buku
+    </option>
+    <option value="draft" ${b.status === 'draft' ? 'selected' : ''}>
+      Draft - Simpan tanpa paparan
+    </option>
+  </select>
+</div>
       </div>
     `;
   }
@@ -846,11 +854,13 @@
       const i = Number(card.dataset.bookCard);
 
       card.querySelectorAll('[data-bf]').forEach(el => {
-        n.books[i][el.dataset.bf] =
-          el.dataset.bf === 'visible'
-            ? el.checked
-            : el.value.trim();
-      });
+  n.books[i][el.dataset.bf] = el.value.trim();
+});
+
+n.books[i].status =
+  n.books[i].status === 'draft' ? 'draft' : 'published';
+
+n.books[i].visible = n.books[i].status === 'published';
     });
 
     document.querySelectorAll('[data-sticker-card]').forEach(card => {
@@ -1018,15 +1028,16 @@
   function bindEvents() {
     $('maVEAddBook').onclick = () => {
       cfg = readForm();
-      cfg.books.push({
-        id:`book-${Date.now()}`,
-        title:'',
-        description:'',
-        price:'',
-        url:'',
-        image_url:'',
-        visible:true
-      });
+    cfg.books.push({
+  id:`book-${Date.now()}`,
+  title:'',
+  description:'',
+  price:'',
+  url:'',
+  image_url:'',
+  status:'published',
+  visible:true
+});
       renderEditor();
     };
 
