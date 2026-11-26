@@ -946,35 +946,115 @@ function quizLetter(index) {
   return "ABCD"[index];
 }
 
+
 // =============================================
-// ADMIN DEMO - SOALAN TEMPATAN
+// ADMIN - PENGURUSAN SOALAN KUIZ
 // =============================================
 
+let editingQuestionIndex = null;
+
 const questionForm = $("questionForm");
+
+function resetQuestionForm() {
+  editingQuestionIndex = null;
+
+  if (questionForm) questionForm.reset();
+
+  const submitButton = questionForm?.querySelector(
+    'button[type="submit"]'
+  );
+
+  if (submitButton) submitButton.textContent = "Simpan Soalan";
+
+  const cancelButton = $("cancelQuestionEdit");
+  if (cancelButton) cancelButton.classList.add("hidden");
+}
+
+function editAdminQuestion(index) {
+  const question = questions[index];
+
+  if (!question || !questionForm) return;
+
+  editingQuestionIndex = index;
+
+  $("adminLevel").value = question.level;
+  updateSubjects(question.level, $("adminSubject"));
+
+  $("adminSubject").value = question.subject;
+  $("adminTopic").value = question.topic;
+  $("adminQuestion").value = question.q;
+
+  $("optA").value = question.options?.[0] || "";
+  $("optB").value = question.options?.[1] || "";
+  $("optC").value = question.options?.[2] || "";
+  $("optD").value = question.options?.[3] || "";
+
+  $("adminCorrect").value = String(question.answer);
+  $("adminExplanation").value = question.explanation || "";
+
+  const submitButton = questionForm.querySelector(
+    'button[type="submit"]'
+  );
+
+  if (submitButton) submitButton.textContent = "Kemaskini Soalan";
+
+  const cancelButton = $("cancelQuestionEdit");
+  if (cancelButton) cancelButton.classList.remove("hidden");
+
+  questionForm.scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
+}
 
 if (questionForm) {
   questionForm.addEventListener("submit", event => {
     event.preventDefault();
 
-    questions.push({
+    const updatedQuestion = {
       level: $("adminLevel").value,
       subject: $("adminSubject").value,
       topic: $("adminTopic").value.trim(),
       q: $("adminQuestion").value.trim(),
       options: [
-        $("optA").value,
-        $("optB").value,
-        $("optC").value,
-        $("optD").value
+        $("optA").value.trim(),
+        $("optB").value.trim(),
+        $("optC").value.trim(),
+        $("optD").value.trim()
       ],
       answer: Number($("adminCorrect").value),
       explanation: $("adminExplanation").value.trim()
-    });
+    };
+
+    if (
+      !updatedQuestion.q ||
+      !updatedQuestion.topic ||
+      updatedQuestion.options.some(option => !option)
+    ) {
+      alert("Sila lengkapkan soalan, topik dan keempat-empat pilihan jawapan.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(updatedQuestion.answer) ||
+      updatedQuestion.answer < 0 ||
+      updatedQuestion.answer > 3
+    ) {
+      alert("Sila pilih jawapan yang betul.");
+      return;
+    }
+
+    if (editingQuestionIndex !== null) {
+      questions[editingQuestionIndex] = updatedQuestion;
+      alert("Soalan berjaya dikemaskini.");
+    } else {
+      questions.push(updatedQuestion);
+      alert("Soalan baharu berjaya ditambah.");
+    }
 
     save();
-    event.target.reset();
+    resetQuestionForm();
     renderAdminQuestions();
-    alert("Soalan disimpan dalam browser ini.");
   });
 }
 
@@ -984,21 +1064,69 @@ function renderAdminQuestions() {
 
   list.innerHTML = questions.map((question, index) => `
     <div class="admin-question">
-      <button data-delete="${index}">Padam</button>
-      <b>${question.level} · ${question.subject}</b>
-      <br>${question.q}
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <b>${question.level} · ${question.subject}</b>
+
+        <div style="display:flex;gap:6px">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-edit="${index}">
+            Edit
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-danger"
+            data-delete="${index}">
+            Padam
+          </button>
+        </div>
+      </div>
+
+      <p><b>${question.topic}</b></p>
+      <p>${question.q}</p>
+
+      <small>
+        Jawapan betul: ${"ABCD"[question.answer] || "-"}
+      </small>
     </div>
   `).join("") || '<div class="empty-state">Tiada soalan.</div>';
 
-  document.querySelectorAll("[data-delete]").forEach(button => {
+  list.querySelectorAll("[data-edit]").forEach(button => {
     button.addEventListener("click", () => {
-      if (confirm("Padam soalan ini?")) {
-        questions.splice(Number(button.dataset.delete), 1);
-        save();
-        renderAdminQuestions();
-      }
+      editAdminQuestion(Number(button.dataset.edit));
     });
   });
+
+  list.querySelectorAll("[data-delete]").forEach(button => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.delete);
+
+      if (!confirm("Anda pasti mahu memadam soalan ini?")) return;
+
+      questions.splice(index, 1);
+
+      if (editingQuestionIndex === index) {
+        resetQuestionForm();
+      } else if (
+        editingQuestionIndex !== null &&
+        editingQuestionIndex > index
+      ) {
+        editingQuestionIndex--;
+      }
+
+      save();
+      renderAdminQuestions();
+      alert("Soalan berjaya dipadam.");
+    });
+  });
+}
+
+const cancelQuestionEdit = $("cancelQuestionEdit");
+
+if (cancelQuestionEdit) {
+  cancelQuestionEdit.addEventListener("click", resetQuestionForm);
 }
 
 // =============================================
