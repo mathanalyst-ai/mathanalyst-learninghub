@@ -155,11 +155,51 @@ visible: b.status !== 'draft' && b.visible !== false
         display:none!important;
       }
 
-      #maAdminNav {display:none}
+   
+      /* Paparan menu Admin */
+      #maAdminNav {
+        display:none;
+      }
 
       body.ma-admin-authenticated #maAdminNav {
         display:flex!important;
       }
+
+      /* Elakkan menu dan label berganda */
+      .sidebar .admin-label:not(:first-of-type) {
+        display:none!important;
+      }
+
+      /* Susun paparan Admin pada iPad */
+      #page-admin,
+      #maAdminPanel,
+      #maAdminTools {
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        box-sizing:border-box;
+      }
+
+      #maAdminPanel {
+        overflow:hidden;
+      }
+
+      #maAdminTools .ma-admin-grid {
+        grid-template-columns:minmax(0,1fr);
+      }
+
+      #maAdminTools .ma-access-box {
+        min-width:0;
+        overflow-wrap:anywhere;
+      }
+
+      #maAdminTools input,
+      #maAdminTools select,
+      #maAdminTools textarea {
+        max-width:100%;
+        box-sizing:border-box;
+      }
+
 
       #maAdminEntry {
         display:block;
@@ -564,19 +604,42 @@ visible: b.status !== 'draft' && b.visible !== false
     $('maAdminGateForm').addEventListener('submit', loginAdmin);
   }
 
-  function ensureAdminNav() {
-    const nav = $('mainNav');
-    if (!nav || $('maAdminNav')) return;
+  
+function ensureAdminNav() {
+  const nav = $('mainNav');
+  if (!nav) return;
 
-    const b = document.createElement('button');
-    b.id = 'maAdminNav';
-    b.type = 'button';
-    b.className = 'nav-item';
-    b.innerHTML = '⚙ <span>Portal Admin</span>';
-    b.onclick = openAdmin;
+  let adminButton = $('maAdminNav');
 
-    nav.appendChild(b);
+  if (!adminButton) {
+    adminButton = document.createElement('button');
+    adminButton.id = 'maAdminNav';
+    adminButton.type = 'button';
+    adminButton.className = 'nav-item';
+    adminButton.innerHTML = '⚙ <span>Portal Admin</span>';
+    adminButton.onclick = openAdmin;
+    nav.appendChild(adminButton);
   }
+
+  // Buang menu Portal Admin yang berganda.
+  document.querySelectorAll('.sidebar .nav-item').forEach(button => {
+    const label = button.querySelector('span')?.textContent.trim();
+
+    if (label === 'Portal Admin' && button !== adminButton) {
+      button.remove();
+    }
+  });
+
+  // Buang tajuk Pengurusan yang berulang.
+  const labels = document.querySelectorAll(
+    '.sidebar .admin-label'
+  );
+
+  labels.forEach((label, index) => {
+    if (index > 0) label.remove();
+  });
+}
+
 
   function openAdmin() {
     if (!document.body.classList.contains('ma-admin-authenticated')) return;
