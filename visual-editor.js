@@ -410,7 +410,17 @@ visible: b.status !== 'draft' && b.visible !== false
       }
 
       .ma-ve-btn.publish {background:#16865b}
-      .ma-ve-btn.danger {background:#fff0f0;color:#b42318}
+   .ma-ve-btn.danger {
+  background:#fff0f0!important;
+  color:#b42318!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  padding:10px 13px!important;
+  border:1px solid #f3caca!important;
+  display:inline-block!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
       .ma-ve-btn:disabled {opacity:.55}
 
       .ma-ve-actions {
