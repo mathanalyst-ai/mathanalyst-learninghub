@@ -505,6 +505,170 @@
         </div>
       </div>`;
 
+    
+    // =============================================
+    // PORTAL ADMIN - SISTEM TAB BERSEPADU
+    // =============================================
+    const tools = panel.querySelector('#maAdminTools');
+
+    if (tools && !tools.querySelector('#maAdminTabs')) {
+      const originalGrid = tools.querySelector(':scope > .ma-admin-grid');
+      const codeCard = originalGrid?.children[0];
+      const exerciseCard = originalGrid?.children[1];
+
+      const overview = $('maAdminOverview');
+      const students = $('maStudentManagement');
+      const subscriptions = $('maSubscriptionManagement');
+      const reports = $('maAdminReports');
+      const questions = $('maQuestionPanel');
+
+      const tabStyle = document.createElement('style');
+      tabStyle.textContent = `
+        #maAdminTabs {
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+          margin:18px 0;
+          padding-bottom:12px;
+          border-bottom:1px solid #e8ecf2;
+        }
+
+        #maAdminTabs button {
+          border:0;
+          border-radius:9px;
+          padding:11px 15px;
+          background:#edf0f6;
+          color:#263348;
+          font-weight:700;
+          cursor:pointer;
+        }
+
+        #maAdminTabs button.active {
+          background:#6857e8;
+          color:white;
+        }
+
+        .ma-admin-tab-pane {
+          display:none;
+          min-width:0;
+        }
+
+        .ma-admin-tab-pane.active {
+          display:block;
+        }
+
+        .ma-admin-tab-pane > .ma-access-box {
+          margin:0 0 16px;
+        }
+
+        #maAdminTools .ma-admin-grid {
+          grid-template-columns:minmax(0,1fr);
+        }
+
+        @media(max-width:700px) {
+          #maAdminTabs button {
+            flex:1 1 42%;
+          }
+        }
+      `;
+      document.head.appendChild(tabStyle);
+
+      const tabs = [
+        ['dashboard', 'Dashboard'],
+        ['questions', 'Bank Soalan'],
+        ['exercises', 'Latihan HTML'],
+        ['access', 'Kod & Pelajar'],
+        ['reports', 'Laporan'],
+        ['appearance', 'Paparan']
+      ];
+
+      const tabNav = document.createElement('div');
+      tabNav.id = 'maAdminTabs';
+      tabNav.setAttribute('role', 'tablist');
+
+      const tabContent = document.createElement('div');
+      tabContent.id = 'maAdminTabContent';
+
+      const panes = {};
+
+      tabs.forEach(([id, label], index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.dataset.adminTab = id;
+        button.setAttribute('role', 'tab');
+
+        if (index === 0) button.classList.add('active');
+
+        tabNav.appendChild(button);
+
+        const pane = document.createElement('div');
+        pane.className = 'ma-admin-tab-pane';
+        pane.dataset.adminPane = id;
+        pane.setAttribute('role', 'tabpanel');
+
+        if (index === 0) pane.classList.add('active');
+
+        panes[id] = pane;
+        tabContent.appendChild(pane);
+
+        button.addEventListener('click', () => {
+          tabNav.querySelectorAll('button').forEach(b => {
+            b.classList.toggle('active', b === button);
+            b.setAttribute('aria-selected', b === button ? 'true' : 'false');
+          });
+
+          Object.entries(panes).forEach(([key, element]) => {
+            element.classList.toggle('active', key === id);
+          });
+        });
+      });
+
+      // Susunan kandungan setiap tab
+      if (overview) panes.dashboard.appendChild(overview);
+
+      if (questions) panes.questions.appendChild(questions);
+
+      if (exerciseCard) panes.exercises.appendChild(exerciseCard);
+
+      if (codeCard) panes.access.appendChild(codeCard);
+      if (students) panes.access.appendChild(students);
+      if (subscriptions) panes.access.appendChild(subscriptions);
+
+      if (reports) panes.reports.appendChild(reports);
+
+      // Tab Paparan akan menerima Visual Editor
+      const visualObserver = new MutationObserver(() => {
+        const editor = $('maVisualEditor');
+
+        if (editor && editor.parentElement !== panes.appearance) {
+          panes.appearance.appendChild(editor);
+        }
+      });
+
+      visualObserver.observe(tools, {
+        childList:true,
+        subtree:true
+      });
+
+      const editor = $('maVisualEditor');
+      if (editor) panes.appearance.appendChild(editor);
+
+      // Masukkan tab selepas baris nama Admin
+      const adminHeader = tools.querySelector(':scope > .ma-access-row');
+
+      if (adminHeader) {
+        adminHeader.after(tabNav);
+        tabNav.after(tabContent);
+      } else {
+        tools.prepend(tabContent);
+        tabContent.before(tabNav);
+      }
+
+      // Buang grid asal selepas semua kad dipindahkan
+      originalGrid?.remove();
+    }
+
     const uploadPanel = page.querySelector('.html-upload-panel');
     if (uploadPanel) page.insertBefore(panel, uploadPanel);
     else page.insertBefore(panel, page.firstChild);
