@@ -48,6 +48,52 @@
     #maAdminLogin{display:none!important}
     #maAdminTools.hidden{display:none!important}
     @media(max-width:700px){.ma-admin-grid{grid-template-columns:1fr}.ma-access-box{padding:14px}}
+ 
+/* PAPARAN ADMIN MESRA iPAD */
+#page-admin,
+#maAdminPanel,
+#maAdminTools {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#maAdminPanel {
+  overflow: hidden;
+}
+
+#maAdminTools .ma-admin-grid > * {
+  min-width: 0;
+}
+
+#maAdminTools .ma-access-box {
+  overflow-wrap: anywhere;
+}
+
+#maAdminTools input,
+#maAdminTools select,
+#maAdminTools textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1100px) {
+  #maAdminTools .ma-admin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .ma-access-box {
+    padding: 14px;
+  }
+
+  .ma-access-row {
+    align-items: stretch;
+  }
+}
+
   `;
   document.head.appendChild(style);
 
